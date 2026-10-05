@@ -1,1 +1,16 @@
-@use './abstracts/variables'
+@use './base/reset';
+@use './components/steam-search';
+@use './components/profile-preview';
+@use './pages/landing';
+@use './pages/profile';
+@use './pages/game';
+
+.page-transition-enter-active,
+.page-transition-leave-active {
+  transition: opacity 220ms ease;
+}
+
+.page-transition-enter-from,
+.page-transition-leave-to {
+  opacity: 0;
+}

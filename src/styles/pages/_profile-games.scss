@@ -1,0 +1,767 @@
+@use "../abstracts/variables" as *;
+
+.collection-game {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: $space-4;
+  padding: $space-3;
+  border: 0;
+  border-bottom: 1px solid $glass-white-08;
+  border-radius: $radius-md;
+  background: linear-gradient(105deg, $glass-white-04, transparent 74%);
+  color: $color-text-primary;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform $transition-normal,
+    background $transition-normal,
+    border-color $transition-normal;
+
+  &:hover {
+    transform: translateY(-2px);
+    border-bottom-color: $glass-white-15;
+    background: linear-gradient(105deg, $glass-white-08, transparent 78%);
+  }
+}
+
+.collection-game__artwork {
+  position: relative;
+  display: grid;
+  width: 76px;
+  height: 76px;
+  flex: 0 0 76px;
+  overflow: hidden;
+  place-items: center;
+  border-radius: $radius-sm;
+  background: $color-bg-surface;
+  box-shadow: $shadow-sm;
+}
+.collection-game__artwork img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.collection-game__placeholder {
+  color: $color-text-tertiary;
+  font-size: $font-size-2xl;
+}
+.collection-game__diamond {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  left: -5px;
+  padding: 3px 2px;
+  border: 1px solid rgba($trophy-diamond, 0.15);
+  border-radius: $radius-xs;
+  background: rgba(4, 12, 16, 0.9);
+  color: $trophy-diamond-light;
+  font-size: 9px;
+  letter-spacing: $letter-spacing-wide;
+  text-align: center;
+  text-shadow: 0 0 12px rgba($trophy-diamond, 0.35);
+  text-transform: uppercase;
+}
+.collection-game__info {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: $space-2;
+}
+.collection-game__heading,
+.collection-game__progress-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-2;
+}
+.collection-game__heading strong {
+  overflow: hidden;
+  font-size: $font-size-sm;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collection-game__heading svg {
+  flex: 0 0 auto;
+  color: $color-text-tertiary;
+}
+.collection-game__progress-label,
+.collection-game__empty {
+  color: $color-text-tertiary;
+  font-size: $font-size-xs;
+}
+.collection-game__progress-label span:last-child {
+  color: $color-text-secondary;
+  font-family: $font-mono;
+}
+.collection-game__track {
+  height: 2px;
+  overflow: hidden;
+  border-radius: $radius-pill;
+  background: $glass-white-10;
+}
+.collection-game__track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    $color-text-secondary,
+    $color-text-primary
+  );
+  transition: width $transition-slow;
+}
+.collection-game__track--diamond span {
+  background: linear-gradient(
+    90deg,
+    $trophy-diamond-dark,
+    $trophy-diamond-light
+  );
+  box-shadow: 0 0 9px rgba($trophy-diamond, 0.38);
+}
+
+.game-card {
+  display: flex;
+  min-height: 92px;
+  align-items: center;
+  gap: $space-3;
+  padding: $space-3;
+  border: 1px solid $glass-white-08;
+  border-radius: $radius-md;
+  background: $glass-background;
+  color: $color-text-primary;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color $transition-normal,
+    background $transition-normal,
+    transform $transition-normal;
+}
+.game-card:hover {
+  transform: translateY(-2px);
+  border-color: $glass-white-20;
+  background: $glass-background-hover;
+}
+.game-card__image {
+  width: 56px;
+  height: 56px;
+  border-radius: $radius-sm;
+  background: $color-bg-surface;
+  object-fit: cover;
+}
+.game-card__body {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: $space-1;
+}
+.game-card__body strong {
+  overflow: hidden;
+  font-size: $font-size-sm;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.game-card__body span,
+.game-card__arrow {
+  color: $color-text-tertiary;
+  font-size: $font-size-xs;
+}
+
+.games-collection {
+  width: 100%;
+  min-width: 0;
+  margin: $space-7 auto 0;
+  text-align: left;
+}
+.games-archive-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: $space-6;
+  margin: 0 0 $space-6;
+  padding: 0 0 $space-5;
+  border-bottom: 1px solid $glass-white-06;
+}
+.games-archive-heading h2 {
+  margin: $space-2 0;
+  color: $color-text-primary;
+  font-size: clamp($font-size-2xl, 3.4vw, $font-size-4xl);
+  font-weight: $font-weight-light;
+  letter-spacing: $letter-spacing-tight;
+}
+.games-archive-heading > div:first-child > p:last-child {
+  margin: 0;
+  color: $color-text-tertiary;
+  font-size: $font-size-sm;
+}
+.games-archive-heading__count {
+  display: flex;
+  align-items: baseline;
+  gap: $space-2;
+  padding-bottom: $space-1;
+}
+.games-archive-heading__count strong {
+  color: $color-text-primary;
+  font-family: $font-mono;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-light;
+}
+.games-archive-heading__count span {
+  color: $color-text-tertiary;
+  font-size: 9px;
+  letter-spacing: $letter-spacing-uppercase;
+}
+
+.games-toolbar {
+  margin-bottom: $space-5;
+}
+.games-search {
+  display: flex;
+  width: min(100%, 520px);
+  min-width: 0;
+  height: 48px;
+  align-items: center;
+  gap: $space-3;
+  margin: 0 0 $space-5;
+  padding-inline: $space-3;
+  border: 0;
+  border-bottom: 1px solid $glass-white-10;
+  border-radius: 0;
+  background: linear-gradient(90deg, $glass-white-02, transparent);
+  color: $color-text-tertiary;
+  transition:
+    border-color $transition-normal,
+    background $transition-normal;
+}
+.games-search:focus-within {
+  border-bottom-color: $glass-white-20;
+  background: linear-gradient(90deg, $glass-white-04, transparent);
+}
+.games-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: $color-text-primary;
+  font: inherit;
+  font-size: $font-size-sm;
+}
+.games-search input::placeholder {
+  color: $color-text-tertiary;
+}
+.games-search:focus-within {
+  outline: 2px solid transparent;
+}
+.games-toolbar__controls {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-5;
+}
+.games-filters {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: clamp($space-3, 2vw, $space-6);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.games-filters::-webkit-scrollbar {
+  display: none;
+}
+.games-filters button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: $space-2;
+  min-height: $button-height-sm;
+  padding: $space-2 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: $color-text-tertiary;
+  font-size: $font-size-xs;
+  letter-spacing: $letter-spacing-wider;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color $transition-normal,
+    border-color $transition-normal;
+}
+.games-filters button:hover,
+.games-filters button.is-active {
+  border-bottom-color: $glass-white-20;
+  color: $color-text-primary;
+}
+.games-filters button span {
+  color: $color-text-muted;
+  font-family: $font-mono;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+.games-sort {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: $space-2;
+  color: $color-text-tertiary;
+  font-size: $font-size-xs;
+  white-space: nowrap;
+}
+.games-sort select {
+  max-width: 150px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: $color-text-secondary;
+  font: inherit;
+  cursor: pointer;
+}
+.games-sort select:focus-visible,
+.games-search input:focus-visible {
+  outline: 2px solid $trophy-diamond;
+  outline-offset: 3px;
+}
+
+.archive-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: $space-5 $space-4;
+}
+.archive-game {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: $space-2;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: $color-text-primary;
+  text-align: left;
+  cursor: pointer;
+}
+.archive-game:focus-visible {
+  outline: 2px solid $trophy-diamond;
+  outline-offset: 4px;
+}
+.archive-game__artwork {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 460 / 215;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: $radius-xs;
+  background: radial-gradient(ellipse, $glass-white-06, $glass-white-01);
+  box-shadow: $shadow-sm;
+}
+.archive-game__artwork > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition:
+    transform 380ms $ease-expressive,
+    filter 350ms ease;
+}
+.archive-game__fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: $color-text-tertiary;
+  font-size: $font-size-4xl;
+}
+.archive-game__overlay {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.01) 18%,
+      rgba(0, 0, 0, 0.1) 45%,
+      rgba(0, 0, 0, 0.84) 100%
+    ),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.12), transparent 80%);
+  transition: background $transition-slow;
+}
+.archive-game__content {
+  position: absolute;
+  z-index: 2;
+  right: $space-3;
+  bottom: $space-3;
+  left: $space-3;
+  display: flex;
+  flex-direction: column;
+  gap: $space-2;
+  transition: transform $transition-normal;
+}
+.archive-game__name {
+  display: block;
+  overflow: hidden;
+  color: $color-text-primary;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.58);
+}
+.archive-game__progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-2;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 10px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+}
+.archive-game__progress b {
+  color: $color-text-primary;
+  font-family: $font-mono;
+  font-size: 10px;
+  font-weight: $font-weight-medium;
+}
+.archive-game__track {
+  display: block;
+  width: 100%;
+  height: 2px;
+  overflow: hidden;
+  border-radius: $radius-pill;
+  background: rgba(255, 255, 255, 0.34);
+  transition: box-shadow $transition-normal;
+}
+.archive-game__track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.22);
+}
+.archive-game__track--diamond > span {
+  background: linear-gradient(
+    90deg,
+    $trophy-diamond-dark,
+    $trophy-diamond-light
+  );
+  box-shadow: 0 0 7px rgba($trophy-diamond, 0.36);
+}
+.archive-game__no-trophies {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 10px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+}
+.archive-game__diamond {
+  position: absolute;
+  z-index: 3;
+  top: $space-2;
+  left: $space-2;
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  gap: $space-1;
+  padding: 4px $space-2;
+  border: 1px solid rgba($trophy-diamond-light, 0.3);
+  border-radius: $radius-pill;
+  background: linear-gradient(110deg, rgba(6, 16, 20, 0.88), rgba($trophy-diamond-dark, 0.62));
+  color: $trophy-diamond-light;
+  font-size: 8px;
+  letter-spacing: $letter-spacing-wider;
+  text-transform: uppercase;
+  text-shadow: 0 0 9px rgba($trophy-diamond, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 14px rgba($trophy-diamond, 0.14);
+  backdrop-filter: blur(8px);
+}
+.archive-game__diamond svg {
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 5px rgba($trophy-diamond-light, 0.5));
+}
+.archive-game__diamond > span {
+  white-space: nowrap;
+}
+.archive-game__arrow {
+  position: absolute;
+  z-index: 3;
+  top: $space-2;
+  right: $space-2;
+  color: rgba(255, 255, 255, 0.72);
+  opacity: 0;
+  transform: translate(-2px, 2px);
+  transition:
+    opacity $transition-normal,
+    transform $transition-normal;
+}
+.archive-game__playtime {
+  padding-left: $space-1;
+  color: $color-text-tertiary;
+  font-size: 10px;
+}
+.archive-game:hover .archive-game__artwork > img {
+  transform: scale(1.025);
+}
+.archive-game:hover .archive-game__overlay {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.01) 12%,
+      rgba(0, 0, 0, 0.13) 40%,
+      rgba(0, 0, 0, 0.88) 100%
+    ),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.16), transparent 80%);
+}
+.archive-game:hover .archive-game__content {
+  transform: translateY(-1px);
+}
+.archive-game:hover .archive-game__track {
+  box-shadow: 0 0 7px rgba(255, 255, 255, 0.1);
+}
+.archive-game:hover .archive-game__arrow {
+  opacity: 1;
+  transform: translate(0);
+}
+.archive-game--diamond .archive-game__artwork {
+  box-shadow:
+    0 0 0 1px rgba($trophy-diamond, 0.16),
+    $shadow-md;
+}
+.archive-game--diamond .archive-game__artwork::after {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  border: 1px solid rgba($trophy-diamond-light, 0.12);
+  border-radius: inherit;
+  background: linear-gradient(
+    120deg,
+    rgba($trophy-diamond-light, 0.035),
+    transparent 35% 75%,
+    rgba($trophy-diamond, 0.04)
+  );
+  content: "";
+  pointer-events: none;
+}
+.archive-game--diamond:hover .archive-game__artwork {
+  box-shadow:
+    0 0 0 1px rgba($trophy-diamond, 0.23),
+    0 0 20px rgba($trophy-diamond, 0.055),
+    $shadow-md;
+}
+
+.games-archive-state {
+  display: flex;
+  min-height: 240px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $space-2;
+  text-align: center;
+}
+.games-archive-state p {
+  margin: 0;
+  color: $color-text-primary;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-light;
+}
+.games-archive-state small {
+  color: $color-text-tertiary;
+  font-size: $font-size-sm;
+}
+.games-archive-state__mark {
+  width: 6px;
+  height: 6px;
+  margin-bottom: $space-3;
+  border-radius: $radius-circle;
+  background: $color-text-secondary;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.24);
+  animation: archive-pulse 1.8s ease-in-out infinite;
+}
+.games-archive-footer {
+  display: flex;
+  min-height: 60px;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-4;
+  margin-top: $space-5;
+  border-top: 1px solid $glass-white-06;
+  color: $color-text-tertiary;
+  font-family: $font-mono;
+  font-size: 10px;
+}
+.games-pagination {
+  display: flex;
+  align-items: center;
+  gap: $space-1;
+}
+.games-pagination > button,
+.games-pagination__pages button {
+  display: grid;
+  min-width: 36px;
+  min-height: 36px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: $radius-circle;
+  background: transparent;
+  color: $color-text-tertiary;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color $transition-normal,
+    color $transition-normal,
+    background $transition-normal;
+}
+.games-pagination > button:hover:not(:disabled),
+.games-pagination__pages button:hover {
+  border-color: $glass-white-10;
+  color: $color-text-primary;
+}
+.games-pagination > button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.games-pagination__pages {
+  display: flex;
+  align-items: center;
+  gap: $space-1;
+}
+.games-pagination__pages button.is-current {
+  border-color: $glass-white-10;
+  background: $glass-white-04;
+  color: $color-text-primary;
+}
+.games-pagination__pages > span {
+  padding-inline: $space-1;
+}
+
+@keyframes archive-pulse {
+  50% {
+    opacity: 0.4;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.12);
+  }
+}
+
+@media (max-width: $breakpoint-xl) {
+  .archive-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: $space-4;
+  }
+}
+@media (max-width: $breakpoint-md) {
+  .games-toolbar__controls {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: $space-3;
+  }
+  .games-sort {
+    align-self: flex-end;
+  }
+  .archive-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: $space-4 $space-3;
+  }
+  .games-pagination {
+    gap: $space-2;
+  }
+  .games-pagination__pages button:nth-child(n + 6) {
+    display: none;
+  }
+}
+@media (max-width: $breakpoint-sm) {
+  .games-collection {
+    margin-top: $space-5;
+  }
+  .games-archive-heading {
+    align-items: center;
+    gap: $space-3;
+    margin-bottom: $space-4;
+    padding-bottom: $space-4;
+  }
+  .games-archive-heading h2 {
+    font-size: $font-size-2xl;
+  }
+  .games-archive-heading__count {
+    gap: $space-1;
+  }
+  .games-archive-heading__count strong {
+    font-size: $font-size-lg;
+  }
+  .games-archive-heading__count span {
+    font-size: 8px;
+  }
+  .games-search {
+    width: 100%;
+    margin-bottom: $space-3;
+  }
+  .games-filters {
+    width: 100%;
+    max-width: 100%;
+    gap: $space-4;
+  }
+  .games-filters button {
+    gap: $space-1;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+  .games-sort {
+    width: 100%;
+    max-width: 100%;
+    align-self: flex-start;
+    justify-content: space-between;
+  }
+  .games-sort select {
+    max-width: 58%;
+  }
+  .archive-grid {
+    min-width: 0;
+    gap: $space-4 $space-2;
+  }
+  .archive-game__artwork {
+    min-width: 0;
+    aspect-ratio: 1.5;
+  }
+  .archive-game__content {
+    right: $space-2;
+    bottom: $space-2;
+    left: $space-2;
+    gap: $space-1;
+  }
+  .archive-game__name {
+    font-size: $font-size-xs;
+  }
+  .archive-game__progress,
+  .archive-game__progress b {
+    font-size: 9px;
+  }
+  .archive-game__diamond {
+    top: $space-2;
+    left: $space-2;
+    font-size: 8px;
+  }
+  .archive-game__playtime {
+    font-size: 9px;
+  }
+  .games-archive-footer {
+    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    gap: $space-2;
+    padding-block: $space-3;
+  }
+  .games-pagination__pages button {
+    min-width: 30px;
+    min-height: 32px;
+  }
+}
+
+@media (hover: none) {
+  .archive-game__arrow {
+    opacity: 0.75;
+    transform: none;
+  }
+  .archive-game__content {
+    transform: none;
+  }
+}

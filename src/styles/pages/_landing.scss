@@ -1,0 +1,309 @@
+@use "../abstracts/variables" as *;
+
+.landing {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 100svh;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      ellipse at 50% 41%,
+      rgba(255, 255, 255, 0.035),
+      transparent 37%
+    ),
+    radial-gradient(
+      ellipse at 50% 100%,
+      rgba(255, 255, 255, 0.025),
+      transparent 52%
+    ),
+    $color-bg-primary;
+
+  &::before,
+  &::after {
+    position: absolute;
+    z-index: $z-background;
+    border-radius: $radius-circle;
+    content: "";
+    pointer-events: none;
+  }
+
+  &::before {
+    top: 13%;
+    left: 50%;
+    width: min(76vw, $container-xl);
+    aspect-ratio: 1;
+    transform: translateX(-50%);
+    border: 1px solid $glass-white-02;
+    mask-image: radial-gradient(circle, #000 0%, transparent 70%);
+  }
+
+  &::after {
+    top: 20%;
+    left: 50%;
+    width: min(54vw, $container-md);
+    aspect-ratio: 1;
+    transform: translateX(-50%);
+    background: radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.035),
+      transparent 68%
+    );
+    filter: blur($glass-blur-xl);
+  }
+
+  &__topline,
+  &__footer {
+    position: relative;
+    z-index: $z-content;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-inline: $content-padding;
+  }
+
+  &__topline {
+    min-height: $header-height;
+    animation: landing-arrive $duration-normal $ease-expressive both;
+  }
+
+  &__wordmark {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-3;
+    color: $color-text-primary;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    letter-spacing: $letter-spacing-wider;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  &__mark {
+    display: grid;
+    width: $space-8;
+    height: $space-8;
+    place-items: center;
+    border: 1px solid $glass-white-10;
+    border-radius: $radius-md;
+    background: $glass-white-02;
+    color: $color-text-secondary;
+  }
+
+  &__edition {
+    color: $color-text-tertiary;
+    font-family: $font-mono;
+    font-size: $font-size-xs;
+    letter-spacing: $letter-spacing-wide;
+  }
+
+  &__content {
+    position: relative;
+    z-index: $z-content;
+    display: flex;
+    width: 100%;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $space-16 $content-padding $space-20;
+    text-align: center;
+  }
+
+  &__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-3;
+    margin: 0 0 $space-6;
+    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    letter-spacing: $letter-spacing-uppercase;
+    text-transform: uppercase;
+    animation: landing-arrive $duration-normal $ease-expressive 80ms both;
+  }
+
+  &__eyebrow-line {
+    width: $space-6;
+    height: 1px;
+    background: $glass-white-15;
+  }
+
+  &__title {
+    margin: 0;
+    color: $color-text-primary;
+    font-family: $font-display;
+    font-size: clamp($font-size-4xl, 8.5vw, $font-size-6xl);
+    font-weight: $font-weight-light;
+    letter-spacing: -0.065em;
+    line-height: $line-height-tight;
+    animation: landing-arrive $duration-slow $ease-expressive 140ms both;
+
+    span {
+      color: $color-text-secondary;
+      font-weight: $font-weight-regular;
+    }
+  }
+
+  &__description {
+    max-width: $container-xs;
+    margin: $space-6 0 0;
+    color: $color-text-secondary;
+    font-size: clamp($font-size-md, 2vw, $font-size-lg);
+    font-weight: $font-weight-light;
+    line-height: $line-height-relaxed;
+    animation: landing-arrive $duration-slow $ease-expressive 220ms both;
+  }
+
+  &__search-error,
+  &__search-loading {
+    width: min(100%, $container-sm);
+    margin: $space-3 auto 0;
+    font-size: $font-size-sm;
+    text-align: center;
+    animation: landing-arrive $duration-normal $ease-expressive both;
+  }
+
+  &__search-error { color: $color-error; }
+  &__search-loading { color: $color-text-secondary; }
+
+  &__collection {
+    display: flex;
+    align-items: center;
+    gap: clamp($space-6, 5vw, $space-12);
+    margin-top: $space-20;
+    animation: landing-arrive $duration-slow $ease-expressive 480ms both;
+  }
+
+  &__tier {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    letter-spacing: $letter-spacing-wide;
+    white-space: nowrap;
+  }
+
+  &__tier-icon {
+    color: currentColor;
+  }
+
+  &__tier--bronze &__tier-icon {
+    color: $trophy-bronze;
+  }
+  &__tier--silver &__tier-icon {
+    color: $trophy-silver;
+  }
+  &__tier--gold &__tier-icon {
+    color: $trophy-gold;
+  }
+  &__tier--diamond &__tier-icon {
+    color: $trophy-diamond;
+  }
+
+  &__footer {
+    min-height: $header-height;
+    border-top: 1px solid $color-border-subtle;
+    color: $color-text-muted;
+    font-family: $font-mono;
+    font-size: $font-size-xs;
+    letter-spacing: $letter-spacing-wide;
+    animation: landing-arrive $duration-normal $ease-expressive 540ms both;
+  }
+
+  &__footer-note {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__footer-dot {
+    width: $space-1;
+    height: $space-1;
+    border-radius: $radius-circle;
+    background: $color-text-tertiary;
+    box-shadow: 0 0 $space-3 $glass-white-20;
+  }
+}
+
+@keyframes landing-arrive {
+  from {
+    transform: translateY($space-3);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: $breakpoint-sm) {
+  .landing {
+    &__topline,
+    &__footer {
+      min-height: $space-16;
+    }
+
+    &__content {
+      padding-top: $space-12;
+      padding-bottom: $space-12;
+    }
+
+    &__eyebrow {
+      margin-bottom: $space-4;
+      font-size: 0.625rem;
+    }
+
+    &__title {
+      font-size: clamp($font-size-3xl, 12vw, $font-size-5xl);
+    }
+
+    &__description {
+      max-width: 30ch;
+      margin-top: $space-4;
+      font-size: $font-size-md;
+    }
+
+    &__collection {
+      gap: $space-4;
+      margin-top: $space-12;
+    }
+
+    &__tier {
+      flex-direction: column;
+      gap: $space-1;
+      font-size: 0.625rem;
+    }
+
+    &__footer {
+      font-size: 0.625rem;
+    }
+  }
+}
+
+@media (max-width: $breakpoint-xs) {
+  .landing {
+    &__edition {
+      display: none;
+    }
+
+    &__collection {
+      gap: $space-3;
+    }
+
+    &__tier {
+      font-size: 0.5625rem;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing,
+  .landing * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

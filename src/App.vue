@@ -1,3 +1,11 @@
+<script setup>
+import { RouterView } from 'vue-router'
+</script>
+
 <template>
-  <h1>Steam Trophies</h1>
+  <RouterView v-slot="{ Component, route }">
+    <Transition name="page-transition" mode="out-in">
+      <component :is="Component" :key="route.path" />
+    </Transition>
+  </RouterView>
 </template>

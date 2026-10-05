@@ -1,0 +1,308 @@
+// ============================================================
+// STEAM TROPHIES
+// Global design tokens
+// ============================================================
+
+
+// ============================================================
+// 01. COLORS
+// ============================================================
+
+// --- Backgrounds ---
+
+$color-bg-primary: #050505;
+$color-bg-secondary: #080808;
+$color-bg-tertiary: #0d0d0d;
+$color-bg-elevated: #111111;
+$color-bg-surface: #151515;
+
+// --- Glass ---
+
+$glass-white-01: rgba(255, 255, 255, 0.01);
+$glass-white-02: rgba(255, 255, 255, 0.02);
+$glass-white-04: rgba(255, 255, 255, 0.04);
+$glass-white-06: rgba(255, 255, 255, 0.06);
+$glass-white-08: rgba(255, 255, 255, 0.08);
+$glass-white-10: rgba(255, 255, 255, 0.10);
+$glass-white-15: rgba(255, 255, 255, 0.15);
+$glass-white-20: rgba(255, 255, 255, 0.20);
+
+// --- Text ---
+
+$color-text-primary: #f5f5f5;
+$color-text-secondary: #a1a1a1;
+$color-text-tertiary: #6b6b6b;
+$color-text-muted: #454545;
+$color-text-inverse: #050505;
+
+// --- Borders ---
+
+$color-border-subtle: rgba(255, 255, 255, 0.06);
+$color-border-default: rgba(255, 255, 255, 0.10);
+$color-border-strong: rgba(255, 255, 255, 0.16);
+
+// --- Accent ---
+
+$color-accent: #ffffff;
+$color-accent-soft: rgba(255, 255, 255, 0.08);
+$color-accent-hover: #ffffff;
+
+
+// ============================================================
+// 02. TROPHY COLORS
+// ============================================================
+
+$trophy-bronze: #cd7f32;
+$trophy-bronze-light: #e3a15d;
+$trophy-bronze-dark: #8f521f;
+
+$trophy-silver: #bfc5cc;
+$trophy-silver-light: #f0f2f4;
+$trophy-silver-dark: #747b83;
+
+$trophy-gold: #d9a928;
+$trophy-gold-light: #ffe58a;
+$trophy-gold-dark: #9a7210;
+
+$trophy-diamond: #8edcff;
+$trophy-diamond-light: #e2f8ff;
+$trophy-diamond-dark: #3989a8;
+$glow-bronze-soft: 0 10px 42px rgba(205, 127, 50, 0.10);
+$glow-silver-soft: 0 10px 42px rgba(191, 197, 204, 0.09);
+$glow-gold-soft: 0 10px 42px rgba(217, 169, 40, 0.11);
+$glow-diamond-soft: 0 0 64px rgba(142, 220, 255, 0.19), inset 0 0 28px rgba(226, 248, 255, 0.045);
+
+
+// ============================================================
+// 03. STATUS COLORS
+// ============================================================
+
+$color-success: #63d391;
+$color-warning: #e8bb62;
+$color-error: #e36b6b;
+$color-info: #6caee8;
+
+
+// ============================================================
+// 04. TYPOGRAPHY
+// ============================================================
+
+// Font families
+
+$font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+$font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+$font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+
+
+// Font sizes
+
+$font-size-xs: 0.6875rem;   // 11px
+$font-size-sm: 0.8125rem;   // 13px
+$font-size-md: 0.9375rem;   // 15px
+$font-size-base: 1rem;       // 16px
+$font-size-lg: 1.125rem;     // 18px
+$font-size-xl: 1.375rem;     // 22px
+$font-size-2xl: 1.75rem;     // 28px
+$font-size-3xl: 2.25rem;     // 36px
+$font-size-4xl: 3rem;        // 48px
+$font-size-5xl: 4rem;        // 64px
+$font-size-6xl: 5rem;        // 80px
+
+
+// Font weights
+
+$font-weight-light: 300;
+$font-weight-regular: 400;
+$font-weight-medium: 500;
+$font-weight-semibold: 600;
+$font-weight-bold: 700;
+
+
+// Line heights
+
+$line-height-tight: 1.1;
+$line-height-snug: 1.25;
+$line-height-normal: 1.5;
+$line-height-relaxed: 1.7;
+
+
+// Letter spacing
+
+$letter-spacing-tight: -0.04em;
+$letter-spacing-normal: 0;
+$letter-spacing-wide: 0.04em;
+$letter-spacing-wider: 0.08em;
+$letter-spacing-uppercase: 0.12em;
+
+
+// ============================================================
+// 05. SPACING
+// ============================================================
+
+$space-1: 0.25rem;   // 4px
+$space-2: 0.5rem;    // 8px
+$space-3: 0.75rem;   // 12px
+$space-4: 1rem;      // 16px
+$space-5: 1.25rem;   // 20px
+$space-6: 1.5rem;    // 24px
+$space-7: 1.75rem;   // 28px
+$space-8: 2rem;      // 32px
+$space-10: 2.5rem;   // 40px
+$space-12: 3rem;      // 48px
+$space-16: 4rem;      // 64px
+$space-20: 5rem;      // 80px
+$space-24: 6rem;      // 96px
+$space-32: 8rem;      // 128px
+
+
+// ============================================================
+// 06. LAYOUT
+// ============================================================
+
+$container-xs: 480px;
+$container-sm: 640px;
+$container-md: 768px;
+$container-lg: 1024px;
+$container-xl: 1280px;
+$container-2xl: 1440px;
+
+$content-max-width: 1440px;
+$content-padding: clamp(1rem, 4vw, 4rem);
+
+
+// ============================================================
+// 07. BORDER RADIUS
+// ============================================================
+
+$radius-xs: 4px;
+$radius-sm: 8px;
+$radius-md: 12px;
+$radius-lg: 16px;
+$radius-xl: 24px;
+$radius-2xl: 32px;
+$radius-3xl: 40px;
+
+$radius-pill: 999px;
+$radius-circle: 50%;
+
+
+// ============================================================
+// 08. GLASSMORPHISM
+// ============================================================
+
+$glass-blur-sm: 8px;
+$glass-blur-md: 16px;
+$glass-blur-lg: 24px;
+$glass-blur-xl: 40px;
+
+$glass-saturation: 140%;
+
+$glass-background: rgba(255, 255, 255, 0.045);
+$glass-background-hover: rgba(255, 255, 255, 0.065);
+
+$glass-border: rgba(255, 255, 255, 0.10);
+$glass-border-hover: rgba(255, 255, 255, 0.18);
+
+$glass-highlight: rgba(255, 255, 255, 0.12);
+
+
+// ============================================================
+// 09. SHADOWS
+// ============================================================
+
+$shadow-xs: 0 2px 8px rgba(0, 0, 0, 0.20);
+$shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.25);
+$shadow-md: 0 8px 32px rgba(0, 0, 0, 0.35);
+$shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.45);
+$shadow-xl: 0 24px 80px rgba(0, 0, 0, 0.55);
+
+
+// ============================================================
+// 10. GLOWS
+// ============================================================
+
+$glow-white: 0 0 40px rgba(255, 255, 255, 0.08);
+
+$glow-bronze: 0 0 40px rgba(205, 127, 50, 0.20);
+$glow-silver: 0 0 40px rgba(191, 197, 204, 0.18);
+$glow-gold: 0 0 40px rgba(217, 169, 40, 0.20);
+$glow-diamond: 0 0 50px rgba(142, 220, 255, 0.25);
+
+
+// ============================================================
+// 11. TRANSITIONS
+// ============================================================
+
+$transition-fast: 120ms ease;
+$transition-normal: 220ms ease;
+$transition-slow: 400ms ease;
+
+$transition-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+$transition-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+
+
+// ============================================================
+// 12. Z-INDEX
+// ============================================================
+
+$z-background: -1;
+$z-base: 0;
+$z-content: 1;
+$z-header: 100;
+$z-dropdown: 200;
+$z-overlay: 500;
+$z-modal: 1000;
+$z-toast: 2000;
+$z-tooltip: 3000;
+
+
+// ============================================================
+// 13. BREAKPOINTS
+// ============================================================
+
+$breakpoint-xs: 360px;
+$breakpoint-sm: 576px;
+$breakpoint-md: 768px;
+$breakpoint-lg: 1024px;
+$breakpoint-xl: 1280px;
+$breakpoint-2xl: 1440px;
+
+
+// ============================================================
+// 14. MOTION
+// ============================================================
+
+$duration-instant: 100ms;
+$duration-fast: 200ms;
+$duration-normal: 350ms;
+$duration-slow: 600ms;
+$duration-slower: 900ms;
+
+$ease-standard: cubic-bezier(0.2, 0, 0, 1);
+$ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+$ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+$ease-expressive: cubic-bezier(0.16, 1, 0.3, 1);
+
+
+// ============================================================
+// 15. UI
+// ============================================================
+
+$header-height: 72px;
+
+$button-height-sm: 36px;
+$button-height-md: 44px;
+$button-height-lg: 52px;
+
+$input-height: 56px;
+
+
+// ============================================================
+// 16. OPACITY
+// ============================================================
+
+$opacity-disabled: 0.4;
+$opacity-muted: 0.6;
+$opacity-subtle: 0.75;
+$opacity-visible: 0.9;
+$opacity-full: 1;

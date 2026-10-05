@@ -1,0 +1,176 @@
+@use "../abstracts/variables" as *;
+@use "./profile-header";
+@use "./profile-display";
+@use "./profile-games";
+@use "./profile-modal";
+
+.profile-page {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 100svh;
+  flex-direction: column;
+  overflow: hidden;
+  padding: $space-6 $content-padding;
+  background:
+    radial-gradient(ellipse at 50% 28%, rgba(255, 255, 255, 0.035), transparent 42%),
+    $color-bg-primary;
+
+  &__content {
+    position: relative;
+    z-index: $z-content;
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    padding-block: $space-16;
+    text-align: center;
+  }
+
+  &__eyebrow,
+  &__label {
+    margin: 0;
+    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    letter-spacing: $letter-spacing-uppercase;
+    text-transform: uppercase;
+  }
+
+  &__identity {
+    display: flex;
+    width: min(100%, $container-xs);
+    flex-direction: column;
+    align-items: center;
+    margin-top: $space-8;
+    animation: profile-arrive $duration-slow $ease-expressive both;
+  }
+
+  &__cache-status {
+    width: 100%;
+    margin: $space-3 0 0;
+    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    text-align: right;
+  }
+
+  &__inline-state {
+    width: min(100%, $container-2xl);
+    padding: $space-6;
+    border: 1px solid $glass-white-08;
+    border-radius: $radius-lg;
+    color: $color-text-tertiary;
+    text-align: center;
+  }
+
+  &__state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: $space-4;
+    margin: auto;
+    color: $color-text-secondary;
+    font-size: $font-size-sm;
+
+    &--error { color: $color-text-secondary; }
+  }
+
+  &__loader {
+    color: $color-text-tertiary;
+    animation: profile-spin 1.4s linear infinite;
+  }
+
+  &__retry {
+    color: $color-text-primary;
+    font-size: $font-size-sm;
+    text-decoration: underline;
+    text-decoration-color: $color-border-strong;
+    text-underline-offset: $space-1;
+  }
+}
+
+.collection-shell {
+  width: min(100%, $container-2xl);
+  min-width: 0;
+  margin-top: $space-10;
+  text-align: left;
+}
+
+.profile-view-tabs {
+  display: flex;
+  justify-content: center;
+  gap: $space-10;
+  border-bottom: 1px solid $glass-white-08;
+
+  &__tab {
+    position: relative;
+    min-height: $button-height-md;
+    padding: $space-3 $space-2 $space-4;
+    border: 0;
+    background: transparent;
+    color: $color-text-tertiary;
+    font-size: $font-size-sm;
+    letter-spacing: $letter-spacing-uppercase;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color $transition-normal;
+
+    &:hover,
+    &.is-active { color: $color-text-primary; }
+
+    &.is-active::after {
+      position: absolute;
+      right: 0;
+      bottom: -1px;
+      left: 0;
+      height: 1px;
+      background: $color-text-primary;
+      content: "";
+    }
+
+    &:focus-visible { outline: 2px solid $trophy-diamond; outline-offset: 3px; }
+  }
+}
+
+.cabinet-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-3;
+  min-height: 64px;
+  color: $color-text-tertiary;
+  font-size: $font-size-xs;
+}
+
+@keyframes profile-arrive {
+  from { transform: translateY($space-3); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes profile-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: $breakpoint-md) {
+  .profile-page { padding: $space-4 $content-padding; }
+  .profile-page__content { padding-block: $space-12; }
+  .collection-shell { margin-top: $space-8; }
+  .profile-view-tabs { gap: $space-8; }
+}
+
+@media (max-width: $breakpoint-sm) {
+  .profile-page__content { padding-block: $space-8; }
+  .collection-shell { width: 100%; margin-top: $space-6; }
+  .profile-view-tabs { gap: $space-6; }
+  .profile-view-tabs__tab { min-height: $button-height-md; padding-inline: $space-3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-page,
+  .profile-page *,
+  .archive-game *,
+  .games-archive-state__mark {
+    animation-duration: 0.01ms;
+    transition-duration: 0.01ms;
+  }
+}
+

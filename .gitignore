@@ -128,3 +128,10 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Backend
+backend/.env
+backend/.venv/
+
+# Temporary browser QA scripts
+.steam-search-flow.mjs

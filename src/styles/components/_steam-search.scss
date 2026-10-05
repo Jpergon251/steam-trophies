@@ -1,0 +1,208 @@
+@use "../abstracts/variables" as *;
+
+.steam-search {
+  width: min(100%, $container-sm);
+  margin: $space-10 auto 0;
+  animation: search-arrive $duration-slow $ease-expressive 320ms both;
+
+  &__field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: $input-height;
+    padding: 0 $space-2 0 $space-6;
+    overflow: hidden;
+    border: 1px solid $glass-border;
+    border-radius: $radius-lg;
+    background: rgba(17, 17, 17, 0.68);
+    box-shadow:
+      $shadow-md,
+      inset 0 1px 0 $glass-white-04;
+    backdrop-filter: blur($glass-blur-lg) saturate($glass-saturation);
+    transition:
+      background $transition-normal,
+      border-color $transition-normal,
+      box-shadow $transition-normal,
+      transform $transition-normal;
+
+    &::before {
+      position: absolute;
+      inset: 0 18% auto;
+      height: 1px;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        $glass-highlight,
+        transparent
+      );
+      content: "";
+      opacity: 0.65;
+      pointer-events: none;
+    }
+
+    &:hover {
+      border-color: $glass-border-hover;
+      background: rgba(21, 21, 21, 0.78);
+      box-shadow:
+        $shadow-lg,
+        inset 0 1px 0 $glass-white-06;
+    }
+
+    &:focus-within {
+      transform: translateY(-1px);
+      border-color: $color-border-strong;
+      background: rgba(21, 21, 21, 0.88);
+      box-shadow:
+        $shadow-lg,
+        $glow-white,
+        inset 0 1px 0 $glass-white-08;
+    }
+  }
+
+  &__icon {
+    flex: 0 0 auto;
+    color: $color-text-tertiary;
+    transition: color $transition-normal;
+  }
+
+  &__field:focus-within &__icon,
+  &__field--filled &__icon {
+    color: $color-text-secondary;
+  }
+
+  &__input {
+    width: 100%;
+    min-width: 0;
+    min-height: $input-height;
+    padding: 0 $space-4;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: $color-text-primary;
+    font-size: $font-size-md;
+    letter-spacing: $letter-spacing-normal;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+      opacity: 1;
+      transition: color $transition-normal;
+    }
+
+    &:focus::placeholder {
+      color: $color-text-muted;
+    }
+
+    &::-webkit-search-cancel-button {
+      filter: grayscale(1);
+      opacity: 0.45;
+    }
+  }
+
+  &__submit {
+    display: grid;
+    flex: 0 0 auto;
+    width: $button-height-md;
+    height: $button-height-md;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: $radius-md;
+    background: transparent;
+    color: $color-text-tertiary;
+    cursor: pointer;
+
+    &:disabled {
+      cursor: wait;
+      opacity: $opacity-disabled;
+    }
+    transition:
+      background $transition-normal,
+      color $transition-normal,
+      border-color $transition-normal,
+      transform $transition-normal;
+
+    &:hover:not(:disabled) {
+      transform: translate(1px, -1px);
+      border-color: $glass-white-08;
+      background: $glass-white-06;
+      color: $color-text-primary;
+    }
+
+    &:active {
+      transform: translate(0);
+    }
+  }
+
+  &__hint {
+    min-height: 1.5em;
+    margin: $space-4 0 0;
+    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    letter-spacing: $letter-spacing-wide;
+    text-align: center;
+    transition: color $transition-normal;
+
+    &--active {
+      color: $color-text-secondary;
+      letter-spacing: $letter-spacing-normal;
+    }
+
+    &--error {
+      color: $color-error;
+      letter-spacing: $letter-spacing-normal;
+    }
+  }
+
+  kbd {
+    padding: 0.15em 0.42em;
+    border: 1px solid $color-border-default;
+    border-radius: $radius-xs;
+    background: $glass-white-02;
+    color: $color-text-secondary;
+    font-family: $font-mono;
+    font-size: 0.9em;
+    letter-spacing: 0;
+  }
+}
+
+@keyframes search-arrive {
+  from {
+    transform: translateY($space-3);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: $breakpoint-sm) {
+  .steam-search {
+    margin-top: $space-8;
+
+    &__field {
+      min-height: $button-height-lg;
+      padding-left: $space-4;
+    }
+
+    &__input {
+      min-height: $button-height-lg;
+      padding-right: $space-2;
+      padding-left: $space-3;
+      font-size: $font-size-sm;
+    }
+
+    &__submit {
+      width: $button-height-md;
+      height: $button-height-md;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .steam-search,
+  .steam-search * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

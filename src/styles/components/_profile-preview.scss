@@ -1,0 +1,205 @@
+@use "../abstracts/variables" as *;
+
+.profile-preview {
+  display: flex;
+  width: min(100%, $container-sm);
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-6;
+  margin: $space-4 auto 0;
+  padding: $space-5 $space-6;
+  border: 1px solid $glass-border;
+  border-radius: $radius-lg;
+  background: $glass-background;
+  box-shadow:
+    $shadow-md,
+    inset 0 1px 0 $glass-white-04;
+  text-align: left;
+  backdrop-filter: blur($glass-blur-md) saturate($glass-saturation);
+
+  &__identity,
+  &__actions {
+    display: flex;
+    align-items: center;
+  }
+
+  &__identity {
+    min-width: 0;
+    gap: $space-4;
+  }
+
+  &__avatar-frame {
+    display: grid;
+    width: $space-16;
+    height: $space-16;
+    flex: 0 0 auto;
+    overflow: hidden;
+    place-items: center;
+    border: 1px solid $glass-white-10;
+    border-radius: $radius-md;
+    background: $color-bg-elevated;
+    box-shadow: $shadow-sm;
+  }
+
+  &__avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &__avatar-fallback {
+    color: $color-text-tertiary;
+  }
+
+  &__details {
+    min-width: 0;
+  }
+
+  &__eyebrow {
+    margin: 0 0 $space-1;
+    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    letter-spacing: $letter-spacing-uppercase;
+    text-transform: uppercase;
+  }
+
+  &__name {
+    overflow: hidden;
+    margin: 0;
+    color: $color-text-primary;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-medium;
+    letter-spacing: $letter-spacing-tight;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__real-name {
+    margin: $space-1 0 0;
+    color: $color-text-secondary;
+    font-size: $font-size-sm;
+  }
+
+  &__steam-id {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-2;
+    margin: $space-2 0 0;
+    color: $color-text-tertiary;
+    font-family: $font-mono;
+    font-size: $font-size-xs;
+    letter-spacing: $letter-spacing-normal;
+
+    span {
+      color: $color-text-secondary;
+    }
+  }
+
+  &__actions {
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: $space-3;
+  }
+
+  &__steam-link {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    text-decoration: none;
+    transition: color $transition-normal;
+
+    &:hover {
+      color: $color-text-secondary;
+    }
+  }
+
+  &__enter {
+    display: inline-flex;
+    min-height: $button-height-sm;
+    align-items: center;
+    justify-content: center;
+    gap: $space-2;
+    padding: 0 $space-4;
+    border: 1px solid $glass-border;
+    border-radius: $radius-sm;
+    background: $glass-white-04;
+    color: $color-text-primary;
+    font-size: $font-size-sm;
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+      background $transition-normal,
+      border-color $transition-normal,
+      transform $transition-normal;
+
+    &:hover {
+      transform: translateY(-1px);
+      border-color: $glass-border-hover;
+      background: $glass-background-hover;
+    }
+  }
+}
+
+.profile-preview-reveal-enter-active,
+.profile-preview-reveal-leave-active {
+  transition:
+    opacity $duration-normal $ease-decelerate,
+    transform $duration-normal $ease-expressive;
+}
+
+.profile-preview-reveal-enter-from,
+.profile-preview-reveal-leave-to {
+  transform: translateY($space-3);
+  opacity: 0;
+}
+
+@media (max-width: $breakpoint-sm) {
+  .profile-preview {
+    align-items: flex-start;
+    gap: $space-3;
+    padding: $space-4;
+
+    &__identity {
+      gap: $space-3;
+    }
+
+    &__avatar-frame {
+      width: $space-12;
+      height: $space-12;
+    }
+
+    &__name {
+      font-size: $font-size-md;
+    }
+
+    &__steam-id {
+      font-size: 0.625rem;
+    }
+
+    &__actions {
+      gap: $space-2;
+    }
+
+    &__enter {
+      min-height: $button-height-sm;
+      gap: $space-1;
+      padding-inline: $space-2;
+      font-size: $font-size-xs;
+    }
+  }
+}
+
+@media (max-width: $breakpoint-xs) {
+  .profile-preview {
+    flex-direction: column;
+
+    &__actions {
+      width: 100%;
+      flex-direction: row;
+      justify-content: space-between;
+    }
+  }
+}
