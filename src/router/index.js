@@ -1,7 +1,8 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import LandingPage from '../views/LandingPage.vue'
 import ProfilePage from '../views/ProfilePage.vue'
 import GamePage from '../views/GamePage.vue'
+
 const routes = [
   {
     path: '/',
@@ -13,14 +14,21 @@ const routes = [
     name: 'game',
     component: GamePage,
     props: true,
-    beforeEnter: (to) => /^\d{17}$/.test(String(to.params.steamId)) && /^\d+$/.test(String(to.params.appid)) || { name: 'home' },
+    beforeEnter: (to) =>
+      /^\d{17}$/.test(String(to.params.steamId)) &&
+      /^\d+$/.test(String(to.params.appid))
+        ? true
+        : { name: 'home' },
   },
   {
     path: '/profile/:steamId',
     name: 'profile',
     component: ProfilePage,
     props: true,
-    beforeEnter: (to) => /^\d{17}$/.test(String(to.params.steamId)) || { name: 'home' },
+    beforeEnter: (to) =>
+      /^\d{17}$/.test(String(to.params.steamId))
+        ? true
+        : { name: 'home' },
   },
   {
     path: '/:pathMatch(.*)*',
@@ -29,7 +37,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHashHistory(import.meta.env.BASE_URL),
   routes,
   scrollBehavior: () => ({ top: 0 }),
 })
