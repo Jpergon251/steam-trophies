@@ -1,3 +1,6 @@
+import logging
+
+import httpx
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.steam import (
@@ -6,6 +9,8 @@ from app.services.steam import (
     get_steam_profile,
     search_steam_profile,
 )
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Steam Trophies API")
 
@@ -45,7 +50,18 @@ async def steam_achievements(steam_id: str, app_id: int):
         return await get_player_achievements(steam_id, app_id)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
-    except Exception:
+    except Exception as error:
+        upstream_status = (
+            error.response.status_code
+            if isinstance(error, httpx.HTTPStatusError)
+            else None
+        )
+        logger.error(
+            "Steam achievements request failed for app %s (%s, upstream status: %s)",
+            app_id,
+            type(error).__name__,
+            upstream_status or "n/a",
+        )
         raise HTTPException(status_code=502, detail="Steam achievements are not available right now.")
 
 @app.get("/api/steam/profile")

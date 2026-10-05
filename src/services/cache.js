@@ -21,7 +21,9 @@ const PROFILE_STORE = "profiles";
 const GAME_STORE = "games";
 const ACHIEVEMENT_STORE = "achievements";
 
-/** Cache time-to-live. Expired entries are revalidated, never deleted. */
+import { getTrophyTier } from '../data/trophyTiers.js';
+
+// Cache time-to-live. Expired entries are revalidated, never deleted.
 export const CACHE_TTL = 30 * 60 * 1000;
 
 const PROFILE_KEY = "steamId";
@@ -157,6 +159,127 @@ function toAppId(appid) {
   return String(appid);
 }
 
+// --- Serialization helpers --------------------------------------------------
+
+/**
+ * Strips Vue reactivity, proxies, and non-clonable elements from an achievement.
+ */
+export function serializeAchievement(achievement) {
+  if (!achievement || typeof achievement !== 'object') return null;
+  const achieved = achievement.achieved === true || Number(achievement.achieved) === 1;
+  const globalPercent = achievement.global_percent != null && Number.isFinite(Number(achievement.global_percent))
+    ? Number(achievement.global_percent)
+    : null;
+  const tier = String(achievement.tier || getTrophyTier(globalPercent) || 'bronze');
+  return {
+    apiname: String(achievement.apiname || achievement.name || ''),
+    name: String(achievement.name || achievement.apiname || ''),
+    description: String(achievement.description || ''),
+    achieved,
+    unlocktime: Number(achievement.unlocktime) || 0,
+    icon: String(achievement.icon || ''),
+    icongray: String(achievement.icongray || ''),
+    global_percent: globalPercent,
+    tier,
+    appid: String(achievement.appid || ''),
+    gameName: String(achievement.gameName || ''),
+    gameIcon: String(achievement.gameIcon || ''),
+  };
+}
+
+/**
+ * Normalizes and recalculates derived data for a game, returning a pure plain
+ * object safe for IndexedDB structured clone.
+ */
+export function serializeGame(game) {
+  if (!game || typeof game !== 'object') return null;
+  const achievements = Array.isArray(game.achievements)
+    ? game.achievements.map(serializeAchievement).filter(Boolean)
+    : [];
+  const unlocked = achievements.filter((a) => a.achieved);
+  const achievementCount = achievements.length || Number(game.achievementCount || game.totalAchievements || game.achievement_count) || 0;
+  const unlockedCount = achievements.length
+    ? unlocked.length
+    : Number(game.unlockedCount || game.unlockedAchievements || game.achievements_unlocked) || 0;
+  const progress = achievementCount ? Math.round((unlockedCount / achievementCount) * 100) : Number(game.progress || game.completion) || 0;
+  const isDiamond = Boolean(achievementCount > 0 && unlockedCount === achievementCount);
+
+  const tierCounts = {
+    bronze: 0,
+    silver: 0,
+    gold: 0,
+    diamond: isDiamond ? 1 : 0,
+  };
+  if (achievements.length) {
+    for (const a of unlocked) {
+      const tier = a.tier || getTrophyTier(a.global_percent) || 'bronze';
+      if (tierCounts[tier] !== undefined) tierCounts[tier] += 1;
+      else tierCounts.bronze += 1;
+    }
+  } else if (game.tierCounts || game.trophyCounts) {
+    const src = game.tierCounts || game.trophyCounts;
+    tierCounts.bronze = Number(src.bronze) || 0;
+    tierCounts.silver = Number(src.silver) || 0;
+    tierCounts.gold = Number(src.gold) || 0;
+    tierCounts.diamond = isDiamond ? 1 : 0;
+  }
+
+  const playtimeForever = Number(game.playtime_forever) || 0;
+  const playtime2weeks = Number(game.playtime_2weeks) || 0;
+  const rtimeLastPlayed = Number(game.rtime_last_played) || 0;
+
+  return {
+    appid: String(game.appid),
+    name: String(game.name || ''),
+    playtime_forever: playtimeForever,
+    playtime_2weeks: playtime2weeks,
+    rtime_last_played: rtimeLastPlayed,
+    img_icon_url: String(game.img_icon_url || ''),
+    img_logo_url: String(game.img_logo_url || ''),
+    coverUrl: String(game.coverUrl || ''),
+    headerUrl: String(game.headerUrl || ''),
+    fallbackUrl: String(game.fallbackUrl || ''),
+    achievements,
+    achievementsAvailable: game.achievementsAvailable ?? null,
+    achievementCount,
+    totalAchievements: achievementCount,
+    achievement_count: achievementCount,
+    unlockedCount,
+    unlockedAchievements: unlockedCount,
+    achievements_unlocked: unlockedCount,
+    tierCounts,
+    trophyCounts: { ...tierCounts },
+    progress,
+    completion: progress,
+    isDiamond,
+    diamond: isDiamond,
+    achievementsUpdatedAt: Number(game.achievementsUpdatedAt) || 0,
+    achievementsPlaytime: Number(game.achievementsPlaytime ?? playtimeForever) || 0,
+    has_community_visible_stats: Boolean(game.has_community_visible_stats),
+  };
+}
+
+/**
+ * Serializes profile summary into a structured-clone-safe plain object.
+ */
+export function serializeProfile(profile) {
+  if (!profile || typeof profile !== 'object') return null;
+  const serialized = {};
+  for (const [key, value] of Object.entries(profile)) {
+    if (typeof value === 'function' || typeof value === 'symbol') continue;
+    if (typeof value === 'object' && value !== null) {
+      try {
+        serialized[key] = JSON.parse(JSON.stringify(value));
+      } catch {
+        // Skip non-serializable objects
+      }
+    } else {
+      serialized[key] = value;
+    }
+  }
+  return serialized;
+}
+
 // --- Reads -----------------------------------------------------------------
 
 /**
@@ -192,10 +315,11 @@ export async function readProfileSnapshot(steamId) {
 
   const achievementsByAppId = {};
   for (const record of achievementRecords) {
+    const rawList = Array.isArray(record.achievements) ? record.achievements : [];
     achievementsByAppId[toAppId(record.appid)] = {
-      achievements: record.achievements || [],
+      achievements: rawList.map(serializeAchievement).filter(Boolean),
       available: record.available !== false,
-      cachedAt: record.cachedAt || 0,
+      cachedAt: Number(record.cachedAt) || 0,
     };
   }
 
@@ -204,20 +328,34 @@ export async function readProfileSnapshot(steamId) {
   // store when present, but never hide existing legacy data.
   for (const game of gameRecords) {
     const appid = toAppId(game.appid);
-    if (!achievementsByAppId[appid] && Array.isArray(game.achievements)) {
+    if (!achievementsByAppId[appid] && Array.isArray(game.achievements) && game.achievements.length) {
       achievementsByAppId[appid] = {
-        achievements: game.achievements,
+        achievements: game.achievements.map(serializeAchievement).filter(Boolean),
         available: game.achievementsAvailable !== false,
-        cachedAt: game.achievementsUpdatedAt || game.cachedAt || 0,
+        cachedAt: Number(game.achievementsUpdatedAt || game.cachedAt) || 0,
       };
     }
   }
 
+  const games = gameRecords.map(({ steamId: _steamId, ...game }) => {
+    const appid = toAppId(game.appid);
+    const ach = achievementsByAppId[appid];
+    const achievements = ach?.achievements?.length ? ach.achievements : (Array.isArray(game.achievements) ? game.achievements : []);
+    const available = ach ? ach.available : (game.achievementsAvailable ?? null);
+    const updatedAt = ach?.cachedAt || game.achievementsUpdatedAt || 0;
+    return serializeGame({
+      ...game,
+      achievements,
+      achievementsAvailable: available,
+      achievementsUpdatedAt: updatedAt,
+    });
+  }).filter(Boolean);
+
   return {
-    profile: profileRecord?.profile || null,
-    profileCachedAt: profileRecord?.cachedAt || 0,
-    games: gameRecords.map(({ steamId: _steamId, ...game }) => game),
-    gamesCachedAt: profileRecord?.gamesCachedAt || 0,
+    profile: profileRecord?.profile ? serializeProfile(profileRecord.profile) : null,
+    profileCachedAt: Number(profileRecord?.cachedAt) || 0,
+    games,
+    gamesCachedAt: Number(profileRecord?.gamesCachedAt) || 0,
     achievementsByAppId,
   };
 }
@@ -262,7 +400,7 @@ export async function writeGamesSnapshot(
     : null;
 
   if (removeMissing && existingKeys && existingAchievementKeys) {
-    const incomingIds = new Set(games.map((game) => toAppId(game.appid)));
+    const incomingIds = new Set((games || []).map((game) => toAppId(game.appid)));
     for (const key of existingKeys) {
       if (!incomingIds.has(toAppId(key[1]))) gameStore.delete(key);
     }
@@ -273,16 +411,33 @@ export async function writeGamesSnapshot(
     }
   }
 
-  for (const game of games) {
-    gameStore.put({ ...game, steamId: id, appid: toAppId(game.appid) });
+  for (const game of (games || [])) {
+    try {
+      const cleanGame = serializeGame(game);
+      if (cleanGame) {
+        gameStore.put({ ...cleanGame, steamId: id, appid: toAppId(cleanGame.appid) });
+        if (cleanGame.achievements && cleanGame.achievements.length > 0) {
+          achievementStore.put({
+            steamId: id,
+            appid: toAppId(cleanGame.appid),
+            achievements: cleanGame.achievements,
+            available: cleanGame.achievementsAvailable !== false,
+            cachedAt: cleanGame.achievementsUpdatedAt || Date.now(),
+          });
+        }
+      }
+    } catch (putError) {
+      console.error(`Failed to persist game ${game?.appid} to IndexedDB:`, putError);
+    }
   }
 
+  const cleanProfile = serializeProfile(profile ?? existingProfile?.profile ?? null);
   profileStore.put({
     ...existingProfile,
     steamId: id,
-    profile: profile ?? existingProfile?.profile ?? null,
+    profile: cleanProfile,
     cachedAt: Date.now(),
-    gamesCachedAt,
+    gamesCachedAt: Number(gamesCachedAt) || Date.now(),
   });
 
   await done;
@@ -291,13 +446,15 @@ export async function writeGamesSnapshot(
 /** Persists a single game record (used by progressive achievement updates). */
 export async function writeGame(steamId, game) {
   const id = normalizeId(steamId);
+  const cleanGame = serializeGame(game);
+  if (!cleanGame) return;
   const db = await openDatabase();
   const tx = db.transaction(GAME_STORE, "readwrite");
   const done = transactionDone(tx);
   tx.objectStore(GAME_STORE).put({
-    ...game,
+    ...cleanGame,
     steamId: id,
-    appid: toAppId(game.appid),
+    appid: toAppId(cleanGame.appid),
   });
   await done;
 }
@@ -309,15 +466,18 @@ export async function writeAchievements(
   { achievements, available, cachedAt = Date.now() },
 ) {
   const id = normalizeId(steamId);
+  const cleanAchievements = Array.isArray(achievements)
+    ? achievements.map(serializeAchievement).filter(Boolean)
+    : [];
   const db = await openDatabase();
   const tx = db.transaction(ACHIEVEMENT_STORE, "readwrite");
   const done = transactionDone(tx);
   tx.objectStore(ACHIEVEMENT_STORE).put({
     steamId: id,
     appid: toAppId(appid),
-    achievements,
-    available,
-    cachedAt,
+    achievements: cleanAchievements,
+    available: available !== false,
+    cachedAt: Number(cachedAt) || Date.now(),
   });
   await done;
 }
@@ -325,12 +485,18 @@ export async function writeAchievements(
 /** Persists only the profile summary, leaving games/achievements untouched. */
 export async function writeProfile(steamId, profile) {
   const id = normalizeId(steamId);
+  const cleanProfile = serializeProfile(profile);
   const db = await openDatabase();
   const tx = db.transaction(PROFILE_STORE, "readwrite");
   const done = transactionDone(tx);
   const store = tx.objectStore(PROFILE_STORE);
   const existing = await requestResult(store.get(id));
-  store.put({ ...existing, steamId: id, profile, cachedAt: Date.now() });
+  store.put({
+    ...existing,
+    steamId: id,
+    profile: cleanProfile ?? existing?.profile ?? null,
+    cachedAt: Date.now(),
+  });
   await done;
 }
 

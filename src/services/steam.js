@@ -41,8 +41,23 @@ async function requestSteamProfile(path, query, parameter = 'q', options = {}) {
 
   return player
 }
+function extractSteamIdentifier(input) {
+  // If the input looks like a full Steam community URL, extract the identifier.
+  // Supports both numeric profile URLs and custom vanity URLs.
+  try {
+    const url = new URL(input);
+    const pathname = url.pathname;
+    const match = pathname.match(/\/profiles\/(\d+)/) || pathname.match(/\/id\/([^/]+)/);
+    if (match) return match[1];
+  } catch {
+    // Not a valid URL, treat as raw identifier.
+  }
+  return input.trim();
+}
+
 export function searchSteamProfile(query) {
-  return requestSteamProfile('/api/steam/search', query)
+  const sanitized = extractSteamIdentifier(query);
+  return requestSteamProfile('/api/steam/search', sanitized);
 }
 
 export function getSteamProfile(steamId, options) {

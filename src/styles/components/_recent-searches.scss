@@ -1,0 +1,269 @@
+@use "../abstracts/variables" as *;
+
+.recent-searches {
+  width: min(100%, $container-sm);
+  margin: $space-6 auto 0;
+  text-align: left;
+  animation: recent-searches-arrive $duration-normal $ease-expressive both;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: $space-2;
+    padding-inline: $space-1;
+  }
+
+  &__title {
+    margin: 0;
+    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    letter-spacing: $letter-spacing-uppercase;
+    text-transform: uppercase;
+  }
+
+  &__clear {
+    padding: $space-1 $space-2;
+    border: 0;
+    border-radius: $radius-xs;
+    background: transparent;
+    color: $color-text-tertiary;
+    font-family: $font-mono;
+    font-size: $font-size-xs;
+    letter-spacing: $letter-spacing-wide;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+      color $transition-fast,
+      background $transition-fast;
+
+    &:hover {
+      background: $glass-white-04;
+      color: $color-text-primary;
+    }
+
+    &:focus-visible {
+      outline: 1px solid $color-border-strong;
+      color: $color-text-primary;
+    }
+  }
+
+  &__frame {
+    overflow: hidden;
+    border: 1px solid $glass-border;
+    border-radius: $radius-lg;
+    background: rgba(17, 17, 17, 0.58);
+    box-shadow:
+      $shadow-md,
+      inset 0 1px 0 $glass-white-04;
+    backdrop-filter: blur($glass-blur-md) saturate($glass-saturation);
+  }
+
+  &__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__entry {
+    border-bottom: 1px solid $color-border-subtle;
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  &__link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-4;
+    padding: $space-3 $space-4;
+    color: inherit;
+    text-decoration: none;
+    transition:
+      background $transition-fast,
+      border-color $transition-fast;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.035);
+
+      .recent-searches__arrow {
+        transform: translate(1px, -1px);
+        color: $color-text-primary;
+      }
+
+      .recent-searches__name {
+        color: $color-text-primary;
+      }
+    }
+
+    &:focus-visible {
+      outline: none;
+      background: rgba(255, 255, 255, 0.05);
+    }
+  }
+
+  &__avatar-frame {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid $glass-white-10;
+    border-radius: $radius-sm;
+    background: $color-bg-elevated;
+    box-shadow: $shadow-xs;
+  }
+
+  &__avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  &__avatar-fallback {
+    color: $color-text-tertiary;
+  }
+
+  &__meta {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    gap: 2px;
+  }
+
+  &__name {
+    overflow: hidden;
+    color: $color-text-primary;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    letter-spacing: $letter-spacing-tight;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color $transition-fast;
+  }
+
+  &__steam-id {
+    overflow: hidden;
+    color: $color-text-tertiary;
+    font-family: $font-mono;
+    font-size: $font-size-xs;
+    letter-spacing: $letter-spacing-normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__steam-id-val {
+    color: $color-text-secondary;
+  }
+
+  &__actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__remove {
+    display: grid;
+    width: 26px;
+    height: 26px;
+    place-items: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: $radius-xs;
+    background: transparent;
+    color: $color-text-muted;
+    cursor: pointer;
+    transition:
+      color $transition-fast,
+      background $transition-fast,
+      border-color $transition-fast;
+
+    &:hover {
+      border-color: $glass-white-10;
+      background: $glass-white-06;
+      color: $color-text-primary;
+    }
+
+    &:focus-visible {
+      outline: none;
+      border-color: $color-border-strong;
+      color: $color-text-primary;
+    }
+  }
+
+  &__arrow {
+    display: grid;
+    place-items: center;
+    color: $color-text-muted;
+    transition:
+      color $transition-fast,
+      transform $transition-fast;
+  }
+}
+
+// Subtle transitions for recent search items
+.recent-item-enter-active,
+.recent-item-leave-active {
+  transition:
+    opacity $transition-normal,
+    transform $transition-normal;
+}
+
+.recent-item-enter-from {
+  transform: translateY(-$space-2);
+  opacity: 0;
+}
+
+.recent-item-leave-to {
+  transform: translateY($space-2);
+  opacity: 0;
+}
+
+.recent-item-move {
+  transition: transform $transition-normal;
+}
+
+@keyframes recent-searches-arrive {
+  from {
+    transform: translateY($space-2);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: $breakpoint-sm) {
+  .recent-searches {
+    margin-top: $space-5;
+
+    &__link {
+      padding: $space-2 $space-3;
+      gap: $space-3;
+    }
+
+    &__avatar-frame {
+      width: 32px;
+      height: 32px;
+      flex: 0 0 32px;
+    }
+
+    &__name {
+      font-size: 0.8125rem;
+    }
+
+    &__steam-id {
+      font-size: 0.625rem;
+    }
+  }
+}
+

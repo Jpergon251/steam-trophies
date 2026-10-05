@@ -4,9 +4,12 @@ import { ArrowLeft, Check, Diamond, LockKeyhole, Search, Trophy } from '@lucide/
 import { getTrophyTier } from '../data/trophyTiers.js'
 import { RouterLink, useRoute } from 'vue-router'
 import { useSteamProfilesStore } from '../stores/steamProfiles.js'
+import { useI18n } from '../i18n'
 
 const route = useRoute()
 const steamStore = useSteamProfilesStore()
+const { t } = useI18n()
+
 const steamId = computed(() => String(route.params.steamId || ''))
 const appid = computed(() => String(route.params.appid || ''))
 const profileState = computed(() => steamStore.profiles[steamId.value])
@@ -37,22 +40,25 @@ const rarestAchievement = computed(() => achievements.value.reduce((rarest, achi
 const activeFilter = ref('all')
 const search = ref('')
 const sortBy = ref('steam')
+
 const filterOptions = computed(() => [
-  { key: 'all', label: 'All', count: counts.value.total },
-  { key: 'unlocked', label: 'Unlocked', count: counts.value.unlocked },
-  { key: 'locked', label: 'Locked', count: counts.value.locked },
+  { key: 'all', label: t('game.filters.all'), count: counts.value.total },
+  { key: 'unlocked', label: t('game.filters.unlocked'), count: counts.value.unlocked },
+  { key: 'locked', label: t('game.filters.locked'), count: counts.value.locked },
 ])
-const sortOptions = [
-  { value: 'steam', label: 'Default · Steam order' },
-  { value: 'name-asc', label: 'Name · A to Z' },
-  { value: 'name-desc', label: 'Name · Z to A' },
-  { value: 'common', label: 'Rarity · Most common' },
-  { value: 'rare', label: 'Rarity · Rarest first' },
-  { value: 'recent', label: 'Recently unlocked' },
-  { value: 'oldest', label: 'Oldest unlocked' },
-  { value: 'locked-first', label: 'Locked first' },
-  { value: 'unlocked-first', label: 'Unlocked first' },
-]
+
+const sortOptions = computed(() => [
+  { value: 'steam', label: t('game.sortOptions.steam') },
+  { value: 'name-asc', label: t('game.sortOptions.nameAsc') },
+  { value: 'name-desc', label: t('game.sortOptions.nameDesc') },
+  { value: 'common', label: t('game.sortOptions.common') },
+  { value: 'rare', label: t('game.sortOptions.rare') },
+  { value: 'recent', label: t('game.sortOptions.recent') },
+  { value: 'oldest', label: t('game.sortOptions.oldest') },
+  { value: 'locked-first', label: t('game.sortOptions.lockedFirst') },
+  { value: 'unlocked-first', label: t('game.sortOptions.unlockedFirst') },
+])
+
 const visibleAchievements = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
   const filtered = achievements.value.filter((achievement) => {
@@ -107,6 +113,7 @@ watch([steamId, appid], async ([id]) => {
   if (!id) return
   if (!steamStore.profiles[id]?.hydratedAt) await steamStore.loadProfile(id)
 }, { immediate: true })
+
 watch(appid, () => {
   activeFilter.value = 'all'
   search.value = ''
@@ -119,27 +126,34 @@ watch(appid, () => {
     <div class="game-page__ambient" aria-hidden="true" />
     <div class="game-page__shell">
       <RouterLink class="game-page__back" :to="{ name: 'profile', params: { steamId }, query: backQuery }">
-        <ArrowLeft :size="16" aria-hidden="true" /> Back to games
+        <ArrowLeft :size="16" aria-hidden="true" /> {{ $t('game.backToGames') }}
       </RouterLink>
 
-      <div v-if="isLoading" class="game-page__state" role="status">Loading your cached game archive…</div>
+      <div v-if="isLoading" class="game-page__state" role="status">
+        {{ $t('game.loadingArchive') }}
+      </div>
+
       <section v-else-if="!game" class="game-page__state" :role="loadError ? 'alert' : 'status'">
         <Trophy :size="26" :stroke-width="1.2" aria-hidden="true" />
-        <h1>{{ loadError ? 'Game archive unavailable' : 'Game not found in this archive' }}</h1>
-        <p>{{ loadError ? 'Steam could not refresh this profile right now.' : 'This game may have been removed from the profile’s current Steam library.' }}</p>
-        <RouterLink class="game-page__state-link" :to="{ name: 'profile', params: { steamId }, query: backQuery }">Return to games</RouterLink>
+        <h1>{{ loadError ? $t('game.archiveUnavailable') : $t('game.gameNotFound') }}</h1>
+        <p>{{ loadError ? $t('game.errorRefresh') : $t('game.removedFromLibrary') }}</p>
+        <RouterLink class="game-page__state-link" :to="{ name: 'profile', params: { steamId }, query: backQuery }">
+          {{ $t('game.returnToGames') }}
+        </RouterLink>
       </section>
 
       <template v-else>
         <header class="game-archive-header" :style="game.headerUrl ? { '--game-artwork': `url(${game.headerUrl})` } : game.coverUrl ? { '--game-artwork': `url(${game.coverUrl})` } : undefined">
           <div class="game-archive-header__content">
-            <p class="game-page__eyebrow">DIGITAL TROPHY ARCHIVE · {{ profile?.personaname || 'STEAM PLAYER' }}</p>
+            <p class="game-page__eyebrow">{{ $t('game.eyebrow', { name: profile?.personaname || 'STEAM PLAYER' }) }}</p>
             <h1>{{ game.name }}</h1>
-            <p class="game-archive-header__playtime" v-if="game.playtime_forever">{{ Math.round(game.playtime_forever / 60) }} hours played</p>
+            <p class="game-archive-header__playtime" v-if="game.playtime_forever">
+              {{ $t('game.hoursPlayed', { hours: Math.round(game.playtime_forever / 60) }) }}
+            </p>
             <div class="game-archive-header__status">
-              <span v-if="isDiamond" class="game-archive-header__diamond"><Diamond :size="15" /> Diamond achieved</span>
-              <span v-else>{{ counts.locked }} achievements remaining</span>
-              <span v-if="sync?.active" class="game-archive-header__updating">Updating achievements…</span>
+              <span v-if="isDiamond" class="game-archive-header__diamond"><Diamond :size="15" /> {{ $t('game.diamondAchieved') }}</span>
+              <span v-else>{{ $t('game.achievementsRemaining', { count: counts.locked }) }}</span>
+              <span v-if="sync?.active" class="game-archive-header__updating">{{ $t('game.updatingAchievements') }}</span>
             </div>
             <div class="game-archive-header__progress" role="progressbar" :aria-valuenow="completion" aria-valuemin="0" aria-valuemax="100" :aria-label="`${game.name} achievement completion`">
               <span :class="{ 'is-diamond': isDiamond }" :style="{ width: `${completion}%` }" />
@@ -150,39 +164,75 @@ watch(appid, () => {
                 <Diamond :size="24" :stroke-width="1.35" />
                 <span class="game-diamond-exhibit__seal"><Diamond :size="9" fill="currentColor" /></span>
               </span>
-              <span class="game-diamond-exhibit__copy"><strong>Diamond trophy</strong><small>Perfect set · 100% complete</small></span>
+              <span class="game-diamond-exhibit__copy">
+                <strong>{{ $t('game.diamondTrophy') }}</strong>
+                <small>{{ $t('game.perfectSet') }}</small>
+              </span>
             </div>
           </div>
           <div class="game-archive-header__stats">
-            <div><strong>{{ counts.unlocked }}</strong><span>UNLOCKED</span></div>
-            <div><strong>{{ counts.total }}</strong><span>TOTAL</span></div>
-            <div><strong>{{ counts.locked }}</strong><span>LOCKED</span></div>
-            <div><strong>{{ completion }}%</strong><span>COMPLETE</span></div>
-            <div v-if="rarestAchievement"><strong>{{ Number(rarestAchievement.global_percent).toFixed(1) }}%</strong><span>RAREST</span></div>
+            <div><strong>{{ counts.unlocked }}</strong><span>{{ $t('game.stats.unlocked') }}</span></div>
+            <div><strong>{{ counts.total }}</strong><span>{{ $t('game.stats.total') }}</span></div>
+            <div><strong>{{ counts.locked }}</strong><span>{{ $t('game.stats.locked') }}</span></div>
+            <div><strong>{{ completion }}%</strong><span>{{ $t('game.stats.complete') }}</span></div>
+            <div v-if="rarestAchievement"><strong>{{ Number(rarestAchievement.global_percent).toFixed(1) }}%</strong><span>{{ $t('game.stats.rarest') }}</span></div>
           </div>
         </header>
 
         <section class="achievement-archive" aria-labelledby="achievement-archive-title">
           <header class="achievement-archive__heading">
-            <div><p class="game-page__eyebrow">THE COLLECTION</p><h2 id="achievement-archive-title">Achievements</h2></div>
-            <p>{{ counts.total }} total · {{ counts.unlocked }} unlocked · {{ counts.locked }} locked</p>
+            <div>
+              <p class="game-page__eyebrow">{{ $t('game.theCollection') }}</p>
+              <h2 id="achievement-archive-title">{{ $t('game.achievementsTitle') }}</h2>
+            </div>
+            <p>{{ $t('game.summaryCount', { total: counts.total, unlocked: counts.unlocked, locked: counts.locked }) }}</p>
           </header>
 
           <div v-if="counts.total" class="achievement-toolbar">
-            <nav class="achievement-filters" aria-label="Filter achievements">
-              <button v-for="filter in filterOptions" :key="filter.key" type="button" :class="{ 'is-active': activeFilter === filter.key }" :aria-pressed="activeFilter === filter.key" @click="activeFilter = filter.key">{{ filter.label }} <span>{{ filter.count }}</span></button>
+            <nav class="achievement-filters" :aria-label="$t('game.filterAria')">
+              <button
+                v-for="filter in filterOptions"
+                :key="filter.key"
+                type="button"
+                :class="{ 'is-active': activeFilter === filter.key }"
+                :aria-pressed="activeFilter === filter.key"
+                @click="activeFilter = filter.key"
+              >
+                {{ filter.label }} <span>{{ filter.count }}</span>
+              </button>
             </nav>
             <label class="achievement-search">
               <Search :size="16" aria-hidden="true" />
-              <input v-model="search" type="search" placeholder="Search achievements…" aria-label="Search achievements by name or description" />
+              <input
+                v-model="search"
+                type="search"
+                :placeholder="$t('game.searchPlaceholder')"
+                :aria-label="$t('game.searchAria')"
+              />
             </label>
-            <label class="achievement-sort"><span>Sort by</span><select v-model="sortBy" aria-label="Sort achievements"><option v-for="option in sortOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+            <label class="achievement-sort">
+              <span>{{ $t('game.sortBy') }}</span>
+              <select v-model="sortBy" :aria-label="$t('game.sortBy')">
+                <option v-for="option in sortOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
           </div>
 
-          <div v-if="!counts.total" class="achievement-archive__empty">NO ACHIEVEMENTS AVAILABLE</div>
-          <div v-else-if="!visibleAchievements.length" class="achievement-archive__empty">No achievements match this search and filter.</div>
+          <div v-if="!counts.total" class="achievement-archive__empty">
+            {{ $t('game.emptyNoAchievements') }}
+          </div>
+          <div v-else-if="!visibleAchievements.length" class="achievement-archive__empty">
+            {{ $t('game.emptyNoMatch') }}
+          </div>
           <ol v-else class="achievement-list">
-            <li v-for="(achievement, index) in visibleAchievements" :key="achievement.apiname || `${achievement.name}-${index}`" class="achievement-row" :class="[`achievement-row--${achievementTier(achievement)}`, { 'achievement-row--locked': !isUnlocked(achievement) }]">
+            <li
+              v-for="(achievement, index) in visibleAchievements"
+              :key="achievement.apiname || `${achievement.name}-${index}`"
+              class="achievement-row"
+              :class="[`achievement-row--${achievementTier(achievement)}`, { 'achievement-row--locked': !isUnlocked(achievement) }]"
+            >
               <div class="achievement-row__icon-wrap">
                 <img v-if="achievement.icon" class="achievement-row__icon" :src="achievement.icon" :alt="`${achievement.name} icon`" loading="lazy" />
                 <Trophy v-else class="achievement-row__fallback" :size="38" :stroke-width="1.2" aria-hidden="true" />
@@ -190,12 +240,23 @@ watch(appid, () => {
                 <span v-else class="achievement-row__locked-mark" aria-label="Locked"><LockKeyhole :size="13" /></span>
               </div>
               <div class="achievement-row__body">
-                <div class="achievement-row__title-line"><h3>{{ achievement.name || achievement.apiname }}</h3><span v-if="achievement.global_percent != null" class="achievement-row__rarity">{{ Number(achievement.global_percent).toFixed(2) }}% global</span></div>
-                <p>{{ achievement.description || 'No description available.' }}</p>
+                <div class="achievement-row__title-line">
+                  <h3>{{ achievement.name || achievement.apiname }}</h3>
+                  <span v-if="achievement.global_percent != null" class="achievement-row__rarity">
+                    {{ $t('game.globalRarity', { percent: Number(achievement.global_percent).toFixed(2) }) }}
+                  </span>
+                </div>
+                <p>{{ achievement.description || $t('game.noDescription') }}</p>
                 <div class="achievement-row__meta">
-                  <span v-if="isUnlocked(achievement)" class="achievement-row__unlocked"><Check :size="14" /> Obtained<span v-if="achievement.unlocktime"> · {{ new Date(Number(achievement.unlocktime) * 1000).toLocaleDateString() }}</span></span>
-                  <span v-else class="achievement-row__locked-label"><LockKeyhole :size="13" /> Still locked</span>
-                  <span v-if="achievement.global_percent != null" class="achievement-row__rarity-mobile">{{ Number(achievement.global_percent).toFixed(2) }}% global rarity</span>
+                  <span v-if="isUnlocked(achievement)" class="achievement-row__unlocked">
+                    <Check :size="14" /> {{ $t('game.obtained') }}<span v-if="achievement.unlocktime"> · {{ new Date(Number(achievement.unlocktime) * 1000).toLocaleDateString() }}</span>
+                  </span>
+                  <span v-else class="achievement-row__locked-label">
+                    <LockKeyhole :size="13" /> {{ $t('game.stillLocked') }}
+                  </span>
+                  <span v-if="achievement.global_percent != null" class="achievement-row__rarity-mobile">
+                    {{ $t('game.globalRarityLong', { percent: Number(achievement.global_percent).toFixed(2) }) }}
+                  </span>
                 </div>
               </div>
             </li>

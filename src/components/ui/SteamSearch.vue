@@ -18,15 +18,14 @@
         autocomplete="off"
         autocapitalize="none"
         spellcheck="false"
-        placeholder="Paste SteamID, username or profile URL"
-        aria-label="Paste SteamID, username or profile URL"
+        :placeholder="$t('landing.searchPlaceholder')"
+        :aria-label="$t('landing.searchPlaceholder')"
         :disabled="loading"
-        @input="clearFeedback"
       />
       <button
         class="steam-search__submit"
         type="submit"
-        aria-label="Search profile"
+        :aria-label="$t('landing.searchSubmit')"
         :disabled="loading"
       >
         <ArrowUpRight :size="18" :stroke-width="1.8" aria-hidden="true" />
@@ -36,8 +35,13 @@
       class="steam-search__hint"
       aria-live="polite"
     >
-      <template v-if="loading">Searching Steam profiles…</template>
-      <template v-else>Press <kbd>Enter</kbd> to explore</template>
+      <template v-if="loading">{{ $t('landing.searching') }}</template>
+      <template v-else-if="locale === 'es'">
+        Pulsa <kbd>Enter</kbd> para explorar
+      </template>
+      <template v-else>
+        Press <kbd>Enter</kbd> to explore
+      </template>
     </p>
   </form>
 </template>
@@ -45,6 +49,9 @@
 <script setup>
 import { ref } from "vue";
 import { ArrowUpRight, Search } from "@lucide/vue";
+import { useI18n } from "../../i18n";
+
+const { locale } = useI18n();
 
 defineProps({
   loading: {
@@ -59,5 +66,4 @@ function submitSearch() {
   const value = query.value.trim();
   if (value) emit("submit", value);
 }
-
 </script>

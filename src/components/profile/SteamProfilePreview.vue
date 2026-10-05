@@ -33,7 +33,7 @@ const profileRoute = { name: 'profile', params: { steamId: props.profile.steamid
       </div>
 
       <div class="profile-preview__details">
-        <p class="profile-preview__eyebrow">Profile located</p>
+        <p class="profile-preview__eyebrow">{{ $t('landing.profileLocated') }}</p>
         <h2 class="profile-preview__name">{{ profile.personaname }}</h2>
         <p v-if="profile.realname" class="profile-preview__real-name">
           {{ profile.realname }}
@@ -51,14 +51,14 @@ const profileRoute = { name: 'profile', params: { steamId: props.profile.steamid
         target="_blank"
         rel="noopener noreferrer"
       >
-        Steam profile
+        {{ $t('landing.steamProfile') }}
         <ExternalLink :size="13" :stroke-width="1.7" aria-hidden="true" />
       </a>
       <RouterLink
         class="profile-preview__enter"
         :to="profileRoute"
       >
-        View profile
+        {{ $t('landing.viewProfile') }}
         <MoveUpRight :size="16" :stroke-width="1.7" aria-hidden="true" />
       </RouterLink>
     </div>

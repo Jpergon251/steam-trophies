@@ -7,12 +7,15 @@ import TrophyModal from '../components/profile/TrophyModal.vue'
 import ProfileViewTabs from '../components/profile/ProfileViewTabs.vue'
 import TrophyCabinet from '../components/profile/TrophyCabinet.vue'
 import GamesCollection from '../components/profile/GamesCollection.vue'
+import { useI18n } from '../i18n'
 
 const route = useRoute()
 const router = useRouter()
 const steamStore = useSteamProfilesStore()
+const { t } = useI18n()
+
 const status = ref('loading')
-const errorMessage = ref('')
+const errorCode = ref(null)
 const selectedView = ref('display')
 const selectedTrophy = ref(null)
 const steamId = computed(() => String(route.params.steamId || ''))
@@ -22,7 +25,7 @@ const trophyCollection = computed(() => activeSteamId.value === steamId.value ? 
 const gamesStatus = computed(() => steamStore.errorFor(steamId.value) && !games.value.length ? 'error' : profile.value ? 'success' : 'loading')
 const collectionStatus = computed(() => profile.value ? 'success' : steamStore.isSyncing(steamId.value) ? 'loading' : 'success')
 const syncState = computed(() => steamStore.syncs[steamId.value] || null)
-const refreshError = computed(() => steamStore.errorFor(steamId.value) && profile.value ? 'Cached data · unable to refresh right now' : '')
+const refreshError = computed(() => steamStore.errorFor(steamId.value) && profile.value ? t('profile.cacheStatus.cached') : '')
 const gamesLoading = computed(() => gamesStatus.value === 'loading' || (!games.value.length && collectionStatus.value === 'loading'))
 const activeSteamId = ref(steamId.value)
 const collectionProgress = computed(() => {
@@ -30,12 +33,14 @@ const collectionProgress = computed(() => {
   return sync && typeof sync === 'object' ? sync : { processed: 0, total: 0 }
 })
 const isHydrating = computed(() => steamStore.isHydrating(steamId.value))
-function getProfileErrorMessage(error) {
-  if (error.status === 400) return "That doesn't look like a valid Steam profile."
-  if (error.status === 404) return 'Steam profile not found.'
-  if (error.status === 502) return "We couldn't connect to Steam right now."
-  return 'Something went wrong while loading this profile.'
-}
+
+const errorMessage = computed(() => {
+  if (!errorCode.value) return ''
+  if (errorCode.value === 400) return t('landing.searchErrorInvalid')
+  if (errorCode.value === 404) return t('landing.searchErrorNotFound')
+  if (errorCode.value === 502) return t('landing.searchErrorConnection')
+  return t('landing.searchErrorGeneric')
+})
 
 async function loadProfile(id) {
   if (!id) return
@@ -43,7 +48,7 @@ async function loadProfile(id) {
   if (previousId && previousId !== id) steamStore.clearProfileMemory(previousId)
   activeSteamId.value = id
   selectedTrophy.value = null
-  errorMessage.value = ''
+  errorCode.value = null
   // Hydration (IndexedDB -> Pinia) happens first and may resolve the UI
   // instantly when a cache exists.
   await steamStore.loadProfile(id)
@@ -62,7 +67,7 @@ async function loadProfile(id) {
   } catch (error) {
     if (activeSteamId.value !== id) return
     console.error('Unable to load Steam profile.', error)
-    errorMessage.value = getProfileErrorMessage(error)
+    errorCode.value = error.status || 500
     status.value = 'error'
   }
 }
@@ -71,14 +76,13 @@ watch(steamId, (id) => loadProfile(id), { immediate: true })
 watch(() => route.query.view, (view) => {
   if (view === 'games') selectedView.value = 'games'
 }, { immediate: true })
+
 async function openGame({ game, context }) {
   const profileLocation = {
     name: 'profile',
     params: { steamId: steamId.value },
     query: { view: 'games', ...context },
   }
-  // Keep the current history entry's collection context, so both this page's
-  // back link and the browser Back button return to the same filtered page.
   await router.replace(profileLocation)
   await router.push({
     name: 'game',
@@ -92,12 +96,11 @@ async function openGame({ game, context }) {
   <main class="profile-page">
     <div class="profile-page__ambient" aria-hidden="true" />
     <RouterLink class="profile-page__back" :to="{ name: 'home' }">
-      <MoveLeft :size="16" :stroke-width="1.7" aria-hidden="true" /> Back to
-      discovery
+      <MoveLeft :size="16" :stroke-width="1.7" aria-hidden="true" /> {{ $t('profile.backToDiscovery') }}
     </RouterLink>
 
     <section class="profile-page__content" aria-labelledby="profile-page-title">
-      <p class="profile-page__eyebrow">Your collection begins here</p>
+      <p class="profile-page__eyebrow">{{ $t('profile.eyebrow') }}</p>
 
       <div
         v-if="status === 'loading' && !profile"
@@ -110,7 +113,7 @@ async function openGame({ game, context }) {
           :stroke-width="1.6"
           aria-hidden="true"
         />
-        <span>Retrieving Steam profile</span>
+        <span>{{ $t('profile.retrieving') }}</span>
       </div>
 
       <div
@@ -119,9 +122,9 @@ async function openGame({ game, context }) {
         role="alert"
       >
         <p>{{ errorMessage }}</p>
-        <RouterLink class="profile-page__retry" :to="{ name: 'home' }"
-          >Search another profile</RouterLink
-        >
+        <RouterLink class="profile-page__retry" :to="{ name: 'home' }">
+          {{ $t('profile.searchAnother') }}
+        </RouterLink>
       </div>
 
       <template v-else-if="profile">
@@ -141,7 +144,7 @@ async function openGame({ game, context }) {
               aria-hidden="true"
             />
           </div>
-          <p class="profile-page__label">STEAM PROFILE</p>
+          <p class="profile-page__label">{{ $t('profile.steamProfile') }}</p>
           <h1 id="profile-page-title" class="profile-page__name">
             {{ profile.personaname }}
           </h1>
@@ -160,19 +163,27 @@ async function openGame({ game, context }) {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Open Steam profile
+            {{ $t('profile.openSteamProfile') }}
             <ExternalLink :size="14" :stroke-width="1.7" aria-hidden="true" />
           </a>
         </div>
 
-        <div v-if="gamesStatus === 'error'" class="profile-page__inline-state">This collection is private or unavailable right now.</div>
+        <div v-if="gamesStatus === 'error'" class="profile-page__inline-state">
+          {{ $t('profile.privateCollection') }}
+        </div>
         <template v-else>
           <div class="collection-shell">
             <ProfileViewTabs v-model="selectedView" />
             <p v-if="refreshError" class="profile-page__cache-status" role="status">{{ refreshError }}</p>
-            <p v-else-if="isHydrating" class="profile-page__cache-status" role="status">Loading cached collection…</p>
-            <p v-else-if="syncState?.active && syncState.phase === 'library'" class="profile-page__cache-status" role="status">Updating…</p>
-            <p v-else-if="syncState?.active && syncState.total" class="profile-page__cache-status" role="status">Updating collection · {{ syncState.processed }} / {{ syncState.total }}</p>
+            <p v-else-if="isHydrating" class="profile-page__cache-status" role="status">
+              {{ $t('profile.cacheStatus.loadingCache') }}
+            </p>
+            <p v-else-if="syncState?.active && syncState.phase === 'library'" class="profile-page__cache-status" role="status">
+              {{ $t('profile.cacheStatus.updating') }}
+            </p>
+            <p v-else-if="syncState?.active && syncState.total" class="profile-page__cache-status" role="status">
+              {{ $t('profile.cacheStatus.updatingProgress', { processed: syncState.processed, total: syncState.total }) }}
+            </p>
             <TrophyCabinet
               v-if="selectedView === 'display'"
               :trophies="trophyCollection"
@@ -182,7 +193,13 @@ async function openGame({ game, context }) {
               @select-trophy="selectedTrophy = $event"
               @select-diamond="selectedTrophy = { isDiamond: true, game: $event, name: $event.name }"
             />
-            <GamesCollection v-else-if="selectedView === 'games'" :games="games" :loading="gamesLoading" :error="gamesStatus === 'error'" @select="openGame" />
+            <GamesCollection
+              v-else-if="selectedView === 'games'"
+              :games="games"
+              :loading="gamesLoading"
+              :error="gamesStatus === 'error'"
+              @select="openGame"
+            />
           </div>
         </template>
         <TrophyModal :trophy="selectedTrophy" @close="selectedTrophy = null" />

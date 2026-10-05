@@ -4,6 +4,9 @@ import { getTrophyTier } from '../data/trophyTiers.js'
 import {
   CACHE_TTL,
   readProfileSnapshot,
+  serializeAchievement,
+  serializeGame,
+  serializeProfile,
   writeAchievements,
   writeGame,
   writeGamesSnapshot,
@@ -13,13 +16,17 @@ import {
 // Achievement data is heavier than the library summary, so it gets a longer
 // TTL. Games whose stats are unavailable are retried sooner.
 const ACHIEVEMENT_CACHE_TTL = 30 * 60 * 1000
-const NEGATIVE_ACHIEVEMENT_CACHE_TTL = 15 * 60 * 1000
+const ACTIVE_GAME_CACHE_TTL = 60 * 1000
+const NEGATIVE_ACHIEVEMENT_CACHE_TTL = 5 * 60 * 1000
 // Keep concurrent Steam achievement requests bounded. Steam's API is rate
 // limited and firing 100+ requests at once is what triggered the previous
 // implementation's instability.
 const ACHIEVEMENT_CONCURRENCY = 5
 
 function getArtUrls(game) {
+  if (!game || !game.appid) {
+    return { coverUrl: '', headerUrl: '', fallbackUrl: '' }
+  }
   return {
     coverUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/library_600x900.jpg`,
     headerUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg`,
@@ -34,71 +41,105 @@ function getArtUrls(game) {
 function decorateAchievements(game, achievements = []) {
   return achievements.map((achievement) => {
     const achieved = achievement.achieved === true || Number(achievement.achieved) === 1
+    const percent = achievement.global_percent != null && Number.isFinite(Number(achievement.global_percent))
+      ? Number(achievement.global_percent)
+      : null
     return {
       ...achievement,
       achieved,
-      appid: game.appid,
-      gameName: game.name,
+      appid: game.appid ? String(game.appid) : '',
+      gameName: game.name || '',
       gameIcon: game.img_icon_url
         ? `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_icon_url}.jpg`
         : '',
-      icon: achievement.icon,
+      icon: achievement.icon || '',
+      icongray: achievement.icongray || '',
+      global_percent: percent,
       // Tier is presentation metadata; locked achievements need it too so the
       // game detail can place every Steam achievement in a shelf.
-      tier: getTrophyTier(achievement.global_percent) || 'bronze',
+      tier: getTrophyTier(percent) || 'bronze',
     }
   })
 }
 
-function deriveGame(game, achievements, available = true, updatedAt = Date.now()) {
-  const normalizedAchievements = achievements.map((achievement) => ({
-    ...achievement,
-    achieved: achievement.achieved === true || Number(achievement.achieved) === 1,
-  }))
-  const unlocked = normalizedAchievements.filter((achievement) => achievement.achieved)
-  const tierCounts = { bronze: 0, silver: 0, gold: 0 }
-  unlocked.forEach((achievement) => {
-    const tier = getTrophyTier(achievement.global_percent) || 'bronze'
-    tierCounts[tier] += 1
+function deriveGame(game, achievements = [], available = true, updatedAt = Date.now()) {
+  const normalizedAchievements = (achievements || []).map((achievement) => {
+    const achieved = achievement.achieved === true || Number(achievement.achieved) === 1
+    const percent = achievement.global_percent != null && Number.isFinite(Number(achievement.global_percent))
+      ? Number(achievement.global_percent)
+      : null
+    const tier = achievement.tier || getTrophyTier(percent) || 'bronze'
+    return {
+      ...achievement,
+      achieved,
+      tier,
+      global_percent: percent,
+      appid: game.appid ? String(game.appid) : achievement.appid ? String(achievement.appid) : '',
+      gameName: game.name || achievement.gameName || '',
+      gameIcon: game.img_icon_url
+        ? `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_icon_url}.jpg`
+        : achievement.gameIcon || '',
+    }
   })
+  const unlocked = normalizedAchievements.filter((achievement) => achievement.achieved)
   const achievementCount = normalizedAchievements.length
   const unlockedCount = unlocked.length
+  const isDiamond = Boolean(achievementCount > 0 && unlockedCount === achievementCount)
+  const progress = achievementCount ? Math.round((unlockedCount / achievementCount) * 100) : 0
+
+  const tierCounts = { bronze: 0, silver: 0, gold: 0, diamond: isDiamond ? 1 : 0 }
+  unlocked.forEach((achievement) => {
+    const tier = achievement.tier || getTrophyTier(achievement.global_percent) || 'bronze'
+    if (tierCounts[tier] !== undefined) {
+      tierCounts[tier] += 1
+    } else {
+      tierCounts.bronze += 1
+    }
+  })
+
+  const playtimeForever = Number(game.playtime_forever) || 0
+  const playtime2weeks = Number(game.playtime_2weeks) || 0
+  const rtimeLastPlayed = Number(game.rtime_last_played) || 0
+
   return {
     ...game,
+    appid: String(game.appid),
+    name: game.name || '',
+    playtime_forever: playtimeForever,
+    playtime_2weeks: playtime2weeks,
+    rtime_last_played: rtimeLastPlayed,
     ...getArtUrls(game),
     achievements: normalizedAchievements,
-    achievementsAvailable: available,
+    achievementsAvailable: available !== false,
     achievementCount,
+    totalAchievements: achievementCount,
+    achievement_count: achievementCount,
     unlockedCount,
+    unlockedAchievements: unlockedCount,
+    achievements_unlocked: unlockedCount,
     tierCounts,
-    progress: achievementCount ? Math.round((unlockedCount / achievementCount) * 100) : 0,
-    // Diamond means full completion, never an achievement rarity classification.
-    isDiamond: achievementCount > 0 && unlockedCount === achievementCount,
-    achievementsUpdatedAt: updatedAt,
-    achievementsPlaytime: Number(game.playtime_forever) || 0,
+    trophyCounts: { ...tierCounts },
+    progress,
+    completion: progress,
+    isDiamond,
+    diamond: isDiamond,
+    achievementsUpdatedAt: updatedAt || Date.now(),
+    achievementsPlaytime: Number(game.achievementsPlaytime ?? playtimeForever) || 0,
+    has_community_visible_stats: Boolean(game.has_community_visible_stats),
   }
 }
 
 /**
- * Rebuilds a game from cached persistence. Game records already carry the
- * derived fields (achievementCount, progress, ...), so this is a cheap
- * normalization instead of a full re-derivation.
+ * Rebuilds a game from cached persistence. Ensures full derivation of all
+ * achievement counters, diamond status, and trophy shelves.
  */
 function fromCache(game) {
-  return {
-    ...game,
-    appid: String(game.appid),
-    ...getArtUrls(game),
-    achievements: game.achievements || [],
-    achievementsAvailable: game.achievementsAvailable ?? null,
-    achievementCount: game.achievementCount || 0,
-    unlockedCount: game.unlockedCount || 0,
-    tierCounts: game.tierCounts || { bronze: 0, silver: 0, gold: 0 },
-    progress: game.progress || 0,
-    isDiamond: Boolean(game.isDiamond),
-    achievementsUpdatedAt: game.achievementsUpdatedAt || 0,
-    achievementsPlaytime: Number(game.achievementsPlaytime ?? game.playtime_forever) || 0,
-  }
+  return deriveGame(
+    game,
+    game.achievements || [],
+    game.achievementsAvailable,
+    game.achievementsUpdatedAt || 0,
+  )
 }
 
 /**
@@ -108,27 +149,41 @@ function fromCache(game) {
  */
 function makeLibraryGame(rawGame, previous) {
   const merged = { ...(previous || {}), ...rawGame, appid: String(rawGame.appid) }
-  return {
-    ...merged,
-    ...getArtUrls(merged),
-    achievements: previous?.achievements || [],
-    achievementsAvailable: previous?.achievementsAvailable ?? null,
-    achievementCount: previous?.achievementCount || 0,
-    unlockedCount: previous?.unlockedCount || 0,
-    tierCounts: previous?.tierCounts || { bronze: 0, silver: 0, gold: 0 },
-    progress: previous?.progress || 0,
-    isDiamond: previous?.isDiamond || false,
-    achievementsUpdatedAt: previous?.achievementsUpdatedAt || 0,
-    achievementsPlaytime: Number(previous?.achievementsPlaytime ?? rawGame.playtime_forever) || 0,
-  }
+  const achievements = previous?.achievements || []
+  const available = previous?.achievementsAvailable ?? null
+  const updatedAt = previous?.achievementsUpdatedAt || 0
+  return deriveGame(merged, achievements, available, updatedAt)
 }
 
-function isAchievementDataStale(game, now) {
-  if (!game.achievementsUpdatedAt) return true
-  const ttl = game.achievementsAvailable === false ? NEGATIVE_ACHIEVEMENT_CACHE_TTL : ACHIEVEMENT_CACHE_TTL
-  const playtimeChanged = Number(game.playtime_forever || 0) > Number(game.achievementsPlaytime || 0)
-  const playedSinceLastCheck = Number(game.rtime_last_played || 0) > Math.floor(game.achievementsUpdatedAt / 1000)
-  return playtimeChanged || playedSinceLastCheck || now - game.achievementsUpdatedAt >= ttl
+function isAchievementDataStale(game, now = Date.now()) {
+  if (!game) return true
+  // Never checked achievements yet
+  if (!game.achievementsUpdatedAt || game.achievementsAvailable === null) return true
+
+  // Negative cache: game stats were unavailable previously
+  if (game.achievementsAvailable === false) {
+    return now - game.achievementsUpdatedAt >= NEGATIVE_ACHIEVEMENT_CACHE_TTL
+  }
+
+  // Playtime increased since last achievement check
+  const playtimeForever = Number(game.playtime_forever || 0)
+  const achievementsPlaytime = Number(game.achievementsPlaytime || 0)
+  if (playtimeForever > achievementsPlaytime) return true
+
+  // Played since last achievement check
+  const lastPlayedSec = Number(game.rtime_last_played || 0)
+  const checkedSec = Math.floor(game.achievementsUpdatedAt / 1000)
+  if (lastPlayedSec > checkedSec) return true
+
+  // Actively played game (played in last 2 weeks or last 24 hours)
+  const playedInLast2Weeks = Number(game.playtime_2weeks || 0) > 0
+  const playedInLast24h = lastPlayedSec > 0 && Math.floor(now / 1000) - lastPlayedSec < 86400
+  if (playedInLast2Weeks || playedInLast24h) {
+    return now - game.achievementsUpdatedAt >= ACTIVE_GAME_CACHE_TTL
+  }
+
+  // General TTL
+  return now - game.achievementsUpdatedAt >= ACHIEVEMENT_CACHE_TTL
 }
 
 function isSteamGameChanged(next, previous) {
@@ -195,11 +250,25 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           // result unless the profile is still relevant or not yet loaded.
           if (!snapshot) return
           if (this.profiles[id]?.hydratedAt) return
+
+          const games = (snapshot.games || []).map((gameRecord) => {
+            const appid = String(gameRecord.appid)
+            const achEntry = snapshot.achievementsByAppId?.[appid]
+            const achievements = achEntry?.achievements?.length
+              ? achEntry.achievements
+              : Array.isArray(gameRecord.achievements)
+                ? gameRecord.achievements
+                : []
+            const available = achEntry ? achEntry.available : gameRecord.achievementsAvailable
+            const updatedAt = achEntry?.cachedAt || gameRecord.achievementsUpdatedAt || 0
+            return deriveGame(gameRecord, achievements, available, updatedAt)
+          })
+
           this.profiles[id] = {
             profile: snapshot.profile,
-            games: snapshot.games.map(fromCache),
-            gamesCachedAt: snapshot.gamesCachedAt,
-            cachedAt: snapshot.profileCachedAt,
+            games,
+            gamesCachedAt: snapshot.gamesCachedAt || 0,
+            cachedAt: snapshot.profileCachedAt || 0,
             hydratedAt: Date.now(),
           }
         } catch (error) {
@@ -278,14 +347,23 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
         // failure cannot lose the library. When nothing changed and the
         // snapshot is fresh we skip the write entirely.
         if (needsSnapshotWrite) {
-          await writeGamesSnapshot(id, {
-            profile,
-            games: nextGames,
-            removeMissing: !hadCache || removedGames.length > 0,
-            gamesCachedAt: this.profiles[id].gamesCachedAt,
-          })
+          try {
+            await writeGamesSnapshot(id, {
+              profile: serializeProfile(profile),
+              games: nextGames.map(serializeGame),
+              removeMissing: !hadCache || removedGames.length > 0,
+              gamesCachedAt: this.profiles[id].gamesCachedAt,
+            })
+          } catch (snapshotError) {
+            console.error('Failed to write games snapshot to cache:', snapshotError)
+            // PARTE 8: Do not cancel achievement sync if library snapshot write fails
+          }
         } else if (profileChanged) {
-          await writeProfile(id, profile)
+          try {
+            await writeProfile(id, serializeProfile(profile))
+          } catch (profileError) {
+            console.warn('Could not persist updated profile:', profileError)
+          }
         }
 
         // Progressive achievement processing starts only after the collection
@@ -293,6 +371,13 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
         const gamesToRefresh = this.achievementPromises[id]
           ? []
           : nextGames.filter((game) => isAchievementDataStale(game, Date.now()))
+
+        // Prioritize actively played games first so new trophies show immediately
+        gamesToRefresh.sort((a, b) => {
+          const scoreA = (Number(a.playtime_2weeks) > 0 ? 10000 : 0) + (Number(a.rtime_last_played) || 0)
+          const scoreB = (Number(b.playtime_2weeks) > 0 ? 10000 : 0) + (Number(b.rtime_last_played) || 0)
+          return scoreB - scoreA
+        })
 
         if (gamesToRefresh.length) {
           this.syncs[id] = {
@@ -352,7 +437,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           } catch (error) {
             // A failed request is transient: keep the last-known data and let
             // the next sync retry. Other games keep processing.
-            console.info(`Skipping temporary achievement failure for ${game.name}.`, error.status)
+            console.info(`Skipping temporary achievement failure for ${game.name}.`, error?.status || error)
           } finally {
             const sync = this.syncs[id]
             if (sync && sync.phase === 'achievements') sync.processed += 1
@@ -372,19 +457,45 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
       const previousByApiName = new Map(previous.map((item) => [item.apiname || item.name, item]))
       // Steam's response is authoritative for achievement state, while cached
       // artwork/description/global rarity survives fields omitted in a refresh.
-      const mergedAchievements = achievements.map((achievement) => ({
-        ...(previousByApiName.get(achievement.apiname || achievement.name) || {}),
-        ...achievement,
-      }))
-      const derived = deriveGame(profileState.games[index], mergedAchievements, available)
+      const mergedAchievements = achievements.map((achievement) => {
+        const prev = previousByApiName.get(achievement.apiname || achievement.name) || {}
+        const achieved = achievement.achieved === true || Number(achievement.achieved) === 1
+        const percent = achievement.global_percent != null && Number.isFinite(Number(achievement.global_percent))
+          ? Number(achievement.global_percent)
+          : prev.global_percent != null && Number.isFinite(Number(prev.global_percent))
+            ? Number(prev.global_percent)
+            : null
+        return {
+          ...prev,
+          ...achievement,
+          achieved,
+          unlocktime: Number(achievement.unlocktime) || Number(prev.unlocktime) || 0,
+          icon: achievement.icon || prev.icon || '',
+          icongray: achievement.icongray || prev.icongray || '',
+          name: achievement.name || prev.name || achievement.apiname,
+          description: achievement.description || prev.description || '',
+          global_percent: percent,
+          tier: getTrophyTier(percent) || prev.tier || 'bronze',
+        }
+      })
+      const derived = deriveGame(profileState.games[index], mergedAchievements, available, Date.now())
       profileState.games.splice(index, 1, derived)
 
-      await writeGame(id, derived)
-      await writeAchievements(id, derived.appid, {
-        achievements: derived.achievements,
-        available,
-        cachedAt: derived.achievementsUpdatedAt,
-      })
+      const cleanGame = serializeGame(derived)
+      const cleanAchievements = derived.achievements.map(serializeAchievement).filter(Boolean)
+
+      try {
+        await Promise.all([
+          writeGame(id, cleanGame),
+          writeAchievements(id, derived.appid, {
+            achievements: cleanAchievements,
+            available,
+            cachedAt: derived.achievementsUpdatedAt,
+          }),
+        ])
+      } catch (persistenceError) {
+        console.error(`Failed to persist achievements for game ${game.name} (${game.appid}):`, persistenceError)
+      }
     },
 
     /** Drops in-memory state for a profile. IndexedDB is intentionally untouched. */
