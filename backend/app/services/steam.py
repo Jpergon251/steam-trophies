@@ -70,10 +70,35 @@ async def get_player_achievements(steam_id: str, app_id: int):
     if app_id <= 0:
         raise ValueError("A valid app ID is required.")
 
-    achievements_data = await steam_request(
-        "ISteamUserStats/GetPlayerAchievements/v1/",
-        {"steamid": steam_id, "appid": app_id, "l": "english"},
-    )
+    try:
+        achievements_data = await steam_request(
+            "ISteamUserStats/GetPlayerAchievements/v1/",
+            {"steamid": steam_id, "appid": app_id, "l": "english"},
+        )
+    except httpx.HTTPStatusError as error:
+        if error.response.status_code == 400:
+            try:
+                error_data = error.response.json()
+            except ValueError:
+                raise error
+
+            player_response = error_data.get("playerstats") if isinstance(error_data, dict) else None
+            if isinstance(player_response, dict):
+                error_message = player_response.get("error")
+                if (
+                    player_response.get("success") is False
+                    and isinstance(error_message, str)
+                    and error_message.casefold() == "requested app has no stats"
+                ):
+                    return {
+                        "game": {"appid": app_id},
+                        "achievements": [],
+                        "achievement_count": 0,
+                        "available": False,
+                        "reason": "no_stats",
+                    }
+        raise
+
     try:
         global_data = await steam_request(
             "ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/",

@@ -23,8 +23,11 @@ const profile = computed(() => activeSteamId.value === steamId.value ? steamStor
 const games = computed(() => activeSteamId.value === steamId.value ? steamStore.gamesFor(steamId.value) : [])
 const trophyCollection = computed(() => activeSteamId.value === steamId.value ? steamStore.trophiesFor(steamId.value) : [])
 const gamesStatus = computed(() => steamStore.errorFor(steamId.value) && !games.value.length ? 'error' : profile.value ? 'success' : 'loading')
-const collectionStatus = computed(() => profile.value ? 'success' : steamStore.isSyncing(steamId.value) ? 'loading' : 'success')
 const syncState = computed(() => steamStore.syncs[steamId.value] || null)
+const collectionStatus = computed(() => {
+  if (!profile.value) return steamStore.isSyncing(steamId.value) ? 'loading' : 'success'
+  return syncState.value?.phase === 'achievements' && !trophyCollection.value.length ? 'loading' : 'success'
+})
 const refreshError = computed(() => steamStore.errorFor(steamId.value) && profile.value ? t('profile.cacheStatus.cached') : '')
 const gamesLoading = computed(() => gamesStatus.value === 'loading' || (!games.value.length && collectionStatus.value === 'loading'))
 const activeSteamId = ref(steamId.value)

@@ -62,7 +62,7 @@ function decorateAchievements(game, achievements = []) {
   })
 }
 
-function deriveGame(game, achievements = [], available = true, updatedAt = Date.now()) {
+function deriveGame(game, achievements = [], available = null, updatedAt = 0) {
   const normalizedAchievements = (achievements || []).map((achievement) => {
     const achieved = achievement.achieved === true || Number(achievement.achieved) === 1
     const percent = achievement.global_percent != null && Number.isFinite(Number(achievement.global_percent))
@@ -110,7 +110,7 @@ function deriveGame(game, achievements = [], available = true, updatedAt = Date.
     rtime_last_played: rtimeLastPlayed,
     ...getArtUrls(game),
     achievements: normalizedAchievements,
-    achievementsAvailable: available !== false,
+    achievementsAvailable: available == null ? null : available !== false,
     achievementCount,
     totalAchievements: achievementCount,
     achievement_count: achievementCount,
@@ -123,7 +123,7 @@ function deriveGame(game, achievements = [], available = true, updatedAt = Date.
     completion: progress,
     isDiamond,
     diamond: isDiamond,
-    achievementsUpdatedAt: updatedAt || Date.now(),
+    achievementsUpdatedAt: Number(updatedAt) || 0,
     achievementsPlaytime: Number(game.achievementsPlaytime ?? playtimeForever) || 0,
     has_community_visible_stats: Boolean(game.has_community_visible_stats),
   }
@@ -259,8 +259,13 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
               : Array.isArray(gameRecord.achievements)
                 ? gameRecord.achievements
                 : []
-            const available = achEntry ? achEntry.available : gameRecord.achievementsAvailable
-            const updatedAt = achEntry?.cachedAt || gameRecord.achievementsUpdatedAt || 0
+            const hasLegacyAchievements = Array.isArray(gameRecord.achievements) && gameRecord.achievements.length > 0
+            const available = achEntry
+              ? achEntry.available
+              : hasLegacyAchievements
+                ? gameRecord.achievementsAvailable
+                : null
+            const updatedAt = achEntry?.cachedAt || (hasLegacyAchievements ? gameRecord.achievementsUpdatedAt : 0)
             return deriveGame(gameRecord, achievements, available, updatedAt)
           })
 
