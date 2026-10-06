@@ -53,18 +53,22 @@ and is not used by FastAPI routes.
 ## Current profile request flow
 
 The Vue store loads the profile and owned-games list first, displays that
-library, then requests one batched unlocked-achievements summary for stale
-games. The backend reuses the owned-games cache and requests
-`GetTopAchievementsForGames` in configurable batches. Full achievement catalogs
-are fetched from the retained legacy route only when a game detail page is
-opened (or an individual Top result is missing, malformed, or reaches the
-configured result cap). Grid/list changes use the same local store and do not
-call the backend. The backend routes are:
+library, then requests unlocked-achievement summaries in pages. The backend
+reuses the owned-games cache and requests `GetTopAchievementsForGames` in
+configurable batches. The summary route accepts an optional `batch_index` and
+returns that batch with `batch_count`; omitting it preserves the full-response
+behavior for compatible callers. The frontend fetches one page at a time with
+at most three requests in parallel and persists each page before proceeding.
+Full achievement catalogs are fetched from the retained legacy route only when
+a game detail page is opened (or an individual Top result is missing,
+malformed, or reaches the configured result cap). Grid/list changes use the
+same local store and do not call the backend. The backend routes are:
 
 - `GET /api/steam/search?q=...`
 - `GET /api/steam/profile?steam_id=...`
 - `GET /api/steam/profile/{steam_id}/games`
 - `GET /api/steam/profile/{steam_id}/achievements`
+- `GET /api/steam/profile/{steam_id}/achievements?batch_index=0`
 - `GET /api/steam/profile/{steam_id}/games/{app_id}/achievements`
 
 Before this optimization, a cold profile with `N` games could make up to
@@ -80,7 +84,9 @@ names/icons, plus a shared/cached global-percentage request.
 The summary endpoint reuses the same owned-games cache as the library route.
 Identical Top batches share cached responses and in-flight requests. An active
 game can pass `force_refresh=true` to bypass its Top response cache when a
-fresh unlock is needed.
+fresh unlock is needed. Paging keeps each request short enough for serverless
+HTTP time limits; large profiles can continue loading across multiple
+requests, and a failed page does not discard pages already cached.
 
 `TOP_ACHIEVEMENTS_MAX` defaults to 1000 and `TOP_ACHIEVEMENTS_BATCH_SIZE`
 defaults to 164, the largest multi-AppID batch verified for this application.

@@ -207,11 +207,16 @@ async def steam_games(steam_id: str):
         raise HTTPException(status_code=502, detail="Steam games are not available right now.")
 
 @app.get("/api/steam/profile/{steam_id}/achievements")
-async def steam_achievement_summaries(steam_id: str, force_refresh: bool = False):
+async def steam_achievement_summaries(
+    steam_id: str,
+    force_refresh: bool = False,
+    batch_index: int | None = Query(default=None, ge=0),
+):
     try:
         result = await get_achievement_summaries(
             steam_id,
             force_refresh=force_refresh,
+            batch_index=batch_index,
         )
         metrics = current_request_metrics.get()
         if metrics is not None:

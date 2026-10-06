@@ -393,6 +393,66 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(call.args[1]["max_achievements"] == 17 for call in top_calls))
         self.assertEqual(len(result["games"]), 5)
 
+    async def test_requested_batch_processes_only_its_appids_and_returns_metadata(self):
+        owned = {
+            "response": {
+                "games": [
+                    {"appid": app_id, "name": str(app_id)}
+                    for app_id in range(1, 6)
+                ],
+            },
+        }
+
+        async def respond(endpoint, params, **kwargs):
+            if endpoint.endswith("GetOwnedGames/v1/"):
+                return owned
+            app_ids = [
+                int(value)
+                for key, value in params.items()
+                if key.startswith("appids[")
+            ]
+            return {
+                "response": {
+                    "games": [{
+                        "appid": app_id,
+                        "total_achievements": 2,
+                        "achievements": [],
+                    } for app_id in app_ids],
+                },
+            }
+
+        with (
+            patch("app.services.steam.steam_request", new=AsyncMock(side_effect=respond)) as request,
+            patch.object(settings, "top_achievements_batch_size", 2),
+        ):
+            result = await get_achievement_summaries(
+                self.steam_id,
+                batch_index=1,
+            )
+
+        top_calls = [
+            call for call in request.await_args_list
+            if "GetTopAchievementsForGames" in call.args[0]
+        ]
+        self.assertEqual(result["batch_index"], 1)
+        self.assertEqual(result["batch_count"], 3)
+        self.assertEqual(result["batch_size"], 2)
+        self.assertEqual([summary["appid"] for summary in result["games"]], [3, 4])
+        self.assertEqual(len(top_calls), 1)
+        self.assertEqual(
+            [int(value) for key, value in top_calls[0].args[1].items() if key.startswith("appids[")],
+            [3, 4],
+        )
+
+    async def test_requested_batch_out_of_range_is_rejected(self):
+        owned = {"response": {"games": [{"appid": 10, "name": "Example"}]}}
+        with (
+            patch("app.services.steam.steam_request", new=AsyncMock(return_value=owned)),
+            patch.object(settings, "top_achievements_batch_size", 2),
+        ):
+            with self.assertRaisesRegex(ValueError, "out of range"):
+                await get_achievement_summaries(self.steam_id, batch_index=1)
+
     async def test_identical_summary_calls_reuse_cached_owned_games_and_batch(self):
         calls = []
 

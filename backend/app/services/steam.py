@@ -179,7 +179,12 @@ async def get_owned_games(steam_id: str):
     )
 
 
-async def get_achievement_summaries(steam_id: str, *, force_refresh: bool = False):
+async def get_achievement_summaries(
+    steam_id: str,
+    *,
+    force_refresh: bool = False,
+    batch_index: int | None = None,
+):
     if not STEAM_ID64_PATTERN.fullmatch(steam_id):
         raise ValueError("A valid SteamID64 is required.")
 
@@ -195,12 +200,28 @@ async def get_achievement_summaries(steam_id: str, *, force_refresh: bool = Fals
     }
     app_ids = sorted(games_by_id)
     if not app_ids:
-        return {"steamid": steam_id, "games": [], "errors": {}}
+        result = {"steamid": steam_id, "games": [], "errors": {}}
+        if batch_index is not None:
+            result.update(
+                batch_index=batch_index,
+                batch_count=0,
+                batch_size=settings.top_achievements_batch_size,
+            )
+        return result
 
     summaries: dict[int, dict] = {}
     errors: dict[int, dict] = {}
     batch_size = settings.top_achievements_batch_size
-    for offset in range(0, len(app_ids), batch_size):
+    batch_count = (len(app_ids) + batch_size - 1) // batch_size
+    if batch_index is not None and batch_index >= batch_count:
+        raise ValueError("Achievement summary batch is out of range.")
+    batch_indices = (
+        range(batch_count)
+        if batch_index is None
+        else (batch_index,)
+    )
+    for current_batch_index in batch_indices:
+        offset = current_batch_index * batch_size
         batch = app_ids[offset:offset + batch_size]
         params = {
             "steamid": steam_id,
@@ -317,11 +338,18 @@ async def get_achievement_summaries(steam_id: str, *, force_refresh: bool = Fals
         summaries.update(fallback_summaries)
         errors.update(fallback_errors)
 
-    return {
+    result = {
         "steamid": steam_id,
         "games": [summaries[app_id] for app_id in app_ids if app_id in summaries],
         "errors": {str(app_id): error for app_id, error in errors.items()},
     }
+    if batch_index is not None:
+        result.update(
+            batch_index=batch_index,
+            batch_count=batch_count,
+            batch_size=batch_size,
+        )
+    return result
 
 
 def _normalize_top_summary(app_id: int, owned_game: dict, top_game: dict | None):

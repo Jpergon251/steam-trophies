@@ -428,13 +428,21 @@ export async function writeGamesSnapshot(
     try {
       const cleanGame = serializeGame(game);
       if (cleanGame) {
+        const achievements = cleanGame.achievements;
+        cleanGame.achievements = [];
         gameStore.put({ ...cleanGame, steamId: id, appid: toAppId(cleanGame.appid) });
-        if (cleanGame.achievements && cleanGame.achievements.length > 0) {
+        if (
+          achievements.length > 0 ||
+          cleanGame.achievementsAvailable !== null ||
+          cleanGame.achievementsUpdatedAt
+        ) {
           achievementStore.put({
             steamId: id,
             appid: toAppId(cleanGame.appid),
-            achievements: cleanGame.achievements,
+            achievements,
             available: cleanGame.achievementsAvailable !== false,
+            detailsComplete: cleanGame.achievementsDetailsComplete,
+            iconsComplete: cleanGame.achievementsIconsComplete,
             cachedAt: cleanGame.achievementsUpdatedAt || Date.now(),
           });
         }
@@ -464,6 +472,7 @@ export async function writeGame(steamId, game) {
   const db = await openDatabase();
   const tx = db.transaction(GAME_STORE, "readwrite");
   const done = transactionDone(tx);
+  cleanGame.achievements = [];
   tx.objectStore(GAME_STORE).put({
     ...cleanGame,
     steamId: id,
@@ -500,6 +509,40 @@ export async function writeAchievements(
     iconsComplete: Boolean(iconsComplete),
     cachedAt: Number(cachedAt) || Date.now(),
   });
+  await done;
+}
+
+/** Persists one fetched Steam summary page in a single IndexedDB transaction. */
+export async function writeAchievementBatch(steamId, games) {
+  const id = normalizeId(steamId);
+  const db = await openDatabase();
+  const tx = db.transaction([GAME_STORE, ACHIEVEMENT_STORE], "readwrite");
+  const done = transactionDone(tx);
+  const gameStore = tx.objectStore(GAME_STORE);
+  const achievementStore = tx.objectStore(ACHIEVEMENT_STORE);
+
+  for (const game of games) {
+    const cleanGame = serializeGame(game);
+    if (!cleanGame) continue;
+    const appid = toAppId(cleanGame.appid);
+    const achievements = cleanGame.achievements.map(serializeAchievement).filter(Boolean);
+    cleanGame.achievements = [];
+    gameStore.put({
+      ...cleanGame,
+      steamId: id,
+      appid,
+    });
+    achievementStore.put({
+      steamId: id,
+      appid,
+      achievements,
+      available: cleanGame.achievementsAvailable !== false,
+      detailsComplete: cleanGame.achievementsDetailsComplete,
+      iconsComplete: cleanGame.achievementsIconsComplete,
+      cachedAt: cleanGame.achievementsUpdatedAt || Date.now(),
+    });
+  }
+
   await done;
 }
 

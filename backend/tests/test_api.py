@@ -88,7 +88,37 @@ class ApiCompatibilityTests(unittest.IsolatedAsyncioTestCase):
             response.headers.get("access-control-allow-origin"),
             "https://jpergon251.github.io",
         )
-        mocked.assert_awaited_once_with(STEAM_ID, force_refresh=True)
+        mocked.assert_awaited_once_with(
+            STEAM_ID,
+            force_refresh=True,
+            batch_index=None,
+        )
+
+    async def test_summary_route_accepts_batch_index(self):
+        summary = {
+            "steamid": STEAM_ID,
+            "games": [{"appid": 10}],
+            "errors": {},
+            "batch_index": 2,
+            "batch_count": 4,
+        }
+        with patch(
+            "app.main.get_achievement_summaries",
+            new=AsyncMock(return_value=summary),
+        ) as mocked:
+            response = await request_app(
+                f"/api/steam/profile/{STEAM_ID}/achievements?batch_index=2",
+                headers={"Origin": "http://localhost:5173"},
+                client_port=5213,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), summary)
+        mocked.assert_awaited_once_with(
+            STEAM_ID,
+            force_refresh=False,
+            batch_index=2,
+        )
 
     async def test_summary_upstream_error_is_cors_enabled_and_logged(self):
         upstream_request = httpx.Request("GET", "https://api.steampowered.com/")

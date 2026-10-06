@@ -86,10 +86,14 @@ export function getSteamGames(steamId, options) {
 }
 
 export function getSteamAchievementSummaries(steamId, options) {
-  const { forceRefresh = false, ...requestOptions } = options || {}
-  const query = forceRefresh ? '?force_refresh=true' : ''
+  const { forceRefresh = false, batchIndex, ...requestOptions } = options || {}
+  const query = new URLSearchParams()
+  if (forceRefresh) query.set('force_refresh', 'true')
+  if (Number.isInteger(batchIndex)) query.set('batch_index', String(batchIndex))
+  const queryString = query.toString()
+  const suffix = queryString ? `?${queryString}` : ''
   return requestSteamJson(
-    `/api/steam/profile/${encodeURIComponent(steamId)}/achievements${query}`,
+    `/api/steam/profile/${encodeURIComponent(steamId)}/achievements${suffix}`,
     requestOptions,
   )
 }
