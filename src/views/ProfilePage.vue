@@ -27,20 +27,6 @@ const unlockedTrophyCount = computed(() =>
 )
 const gamesStatus = computed(() => steamStore.errorFor(steamId.value) && !games.value.length ? 'error' : profile.value ? 'success' : 'loading')
 const syncState = computed(() => steamStore.syncs[steamId.value] || null)
-const syncSummaryLabel = computed(() => {
-  const sync = syncState.value
-  if (!sync || !['complete', 'partial-error'].includes(sync.phase)) return ''
-  const values = {
-    checked: Number(sync.total) || 0,
-    updated: Number(sync.updatedGames) || 0,
-    newGames: Number(sync.newGames) || 0,
-    withAchievements: Number(sync.gamesWithAchievements) || 0,
-    withoutInfo: Number(sync.unknownGames) || 0,
-    errors: Number(sync.errorCount) || 0,
-    unlocked: (Number(sync.unlockedAchievements) || 0).toLocaleString(),
-  }
-  return t(sync.phase === 'complete' ? 'profile.cacheStatus.syncComplete' : 'profile.cacheStatus.syncPartial', values)
-})
 const collectionStatus = computed(() => {
   if (!profile.value) return steamStore.isSyncing(steamId.value) ? 'loading' : 'error'
   if (profileStats.value.unknownGames === 0) return 'complete'
@@ -233,10 +219,10 @@ function findGameByAppId(appId) {
             </div>
             <p
               v-if="collectionStatus === 'partial'"
-              class="profile-page__cache-status"
+              class="profile-page__cache-status profile-overview__notice"
               role="status"
             >
-              {{ $t('profile.partialStats', { count: profileStats.unknownGames }) }}
+              {{ $t('profile.partialStats') }}
             </p>
           </section>
           <div class="collection-shell">
@@ -250,14 +236,8 @@ function findGameByAppId(appId) {
             <p v-else-if="isHydrating" class="profile-page__cache-status" role="status">
               {{ $t('profile.cacheStatus.loadingCache') }}
             </p>
-            <p v-else-if="syncState?.active && syncState.phase === 'fallback'" class="profile-page__cache-status" role="status">
-              {{ $t('profile.cacheStatus.fallbackProgress', { processed: syncState.fallbackProcessed.toLocaleString(), total: syncState.fallbackTotal.toLocaleString() }) }}
-            </p>
             <p v-else-if="syncState?.active" class="profile-page__cache-status" role="status">
-              {{ $t('profile.cacheStatus.syncProgress', { processed: syncState.processed.toLocaleString(), total: syncState.total.toLocaleString() }) }}
-            </p>
-            <p v-else-if="syncSummaryLabel" class="profile-page__cache-status" role="status">
-              {{ syncSummaryLabel }}
+              {{ $t('header.syncing') }}
             </p>
             <TrophyCabinet
               v-if="selectedView === 'display'"

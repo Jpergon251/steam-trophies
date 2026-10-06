@@ -8,6 +8,7 @@ import {
 } from '../services/steam.js'
 import { getTrophyTier } from '../data/trophyTiers.js'
 import { getKnownProfileStats } from '../data/profileStats.js'
+import { markRawGameRecord, replaceGameRecords } from '../data/gameRecords.js'
 import {
   runBoundedQueue,
   runSequentialBatches,
@@ -48,6 +49,34 @@ function updateProfileStats(store, steamId, previousGame, nextGame) {
     updated[key] += (next?.[key] || 0) - (previous?.[key] || 0)
   }
   store.profileStats[id] = updated
+}
+
+function updateProfileStatsForGames(store, steamId, previousGames, nextGames) {
+  const id = String(steamId)
+  if (!nextGames.length) return
+  const current = store.profileStats[id]
+    || getKnownProfileStats(store.profiles[id]?.games || [])
+  const previous = getKnownProfileStats(previousGames)
+  const next = getKnownProfileStats(nextGames)
+  const updated = { ...current }
+  for (const key of PROFILE_STAT_KEYS) {
+    updated[key] += next[key] - previous[key]
+  }
+  store.profileStats[id] = updated
+}
+
+function commitGameEntries(store, steamId, profileState, entries) {
+  if (!entries.length) return
+  updateProfileStatsForGames(
+    store,
+    steamId,
+    entries.map(({ previous }) => previous),
+    entries.map(({ game }) => game),
+  )
+  profileState.games = replaceGameRecords(
+    profileState.games,
+    entries.map(({ gameIndex, game }) => [gameIndex, game]),
+  )
 }
 
 function getArtUrls(game) {
@@ -178,7 +207,7 @@ function deriveGame(game, achievements = [], available = null, updatedAt = 0, su
   const playtime2weeks = Number(game.playtime_2weeks) || 0
   const rtimeLastPlayed = Number(game.rtime_last_played) || 0
 
-  return {
+  return markRawGameRecord({
     ...game,
     appid: String(game.appid),
     name: game.name || '',
@@ -218,7 +247,7 @@ function deriveGame(game, achievements = [], available = null, updatedAt = 0, su
     achievementSyncError: summary.achievementSyncError
       ?? game.achievementSyncError
       ?? '',
-  }
+  })
 }
 
 /**
@@ -723,22 +752,23 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
               achievementSyncError: message,
             })
           }
-          updateProfileStats(this, id, current, updated)
-          profileState.games[gameIndex] = updated
-          return updated
+          return { game: updated, gameIndex, previous: current }
         }
 
         if (!response) {
           sync.errorCount += batch.length
-          const failedGames = []
+          const failedEntries = []
           for (const game of batch) {
-            const updated = await markSyncError(
+            const entry = await markSyncError(
               game,
               lastError?.message || 'summary_request_failed',
             )
-            if (updated) failedGames.push(updated)
+            if (entry) failedEntries.push(entry)
           }
-          if (failedGames.length) await writeAchievementSummaryBatch(id, failedGames)
+          if (failedEntries.length) {
+            await writeAchievementSummaryBatch(id, failedEntries.map(({ game }) => game))
+            commitGameEntries(this, id, profileState, failedEntries)
+          }
           console.warn(
             `Could not load Steam summary batch ${batchIndex + 1}; existing cached summaries were preserved.`,
             lastError,
@@ -755,12 +785,15 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           typeof response.errors !== 'object'
         ) {
           sync.errorCount += batch.length
-          const failedGames = []
+          const failedEntries = []
           for (const game of batch) {
-            const updated = await markSyncError(game, 'invalid_summary_response')
-            if (updated) failedGames.push(updated)
+            const entry = await markSyncError(game, 'invalid_summary_response')
+            if (entry) failedEntries.push(entry)
           }
-          if (failedGames.length) await writeAchievementSummaryBatch(id, failedGames)
+          if (failedEntries.length) {
+            await writeAchievementSummaryBatch(id, failedEntries.map(({ game }) => game))
+            commitGameEntries(this, id, profileState, failedEntries)
+          }
           sync.processed = Math.min(sync.total, sync.processed + batch.length)
           sync.pending = Math.max(0, sync.pending - batch.length)
           return
@@ -808,7 +841,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
                   achievementSyncAttemptAt: Date.now(),
                   achievementSyncError: reason,
                 })
-            updatedEntries.push({ game: updated, gameIndex, unknown: true })
+            updatedEntries.push({ game: updated, gameIndex, unknown: true, previous: current })
             continue
           }
 
@@ -845,24 +878,30 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           if (!['bronze', 'silver', 'gold'].every(
             (tier) => (groups[tier]?.names.length || 0) === updated.tierCounts[tier],
           )) continue
-          updatedEntries.push({ game: updated, gameIndex, unknown: false })
+          updatedEntries.push({ game: updated, gameIndex, unknown: false, previous: current })
         }
 
         const acceptedIds = new Set(
           updatedEntries.map(({ game }) => String(game.appid)),
         )
+        const invalidEntries = []
         for (const summary of response.games) {
           const appid = String(summary?.appid ?? '')
           if (seen.has(appid) && !acceptedIds.has(appid)) {
             sync.errorCount += 1
-            await markSyncError(gamesById.get(appid), 'invalid_summary_data')
+            const entry = await markSyncError(gamesById.get(appid), 'invalid_summary_data')
+            if (entry) invalidEntries.push(entry)
           }
         }
         for (const game of batch) {
           if (!seen.has(String(game.appid))) {
             sync.errorCount += 1
-            await markSyncError(game, 'summary_missing_from_response')
+            const entry = await markSyncError(game, 'summary_missing_from_response')
+            if (entry) invalidEntries.push(entry)
           }
+        }
+        if (invalidEntries.length) {
+          await writeAchievementSummaryBatch(id, invalidEntries.map(({ game }) => game))
         }
         if (updatedEntries.length) {
           const knownEntries = updatedEntries.filter((entry) => !entry.unknown)
@@ -880,14 +919,14 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
               unknownEntries.map(({ game }) => game),
             )
           }
-          for (const { game, gameIndex } of updatedEntries) {
-            updateProfileStats(this, id, profileState.games[gameIndex], game)
-            profileState.games[gameIndex] = game
+          commitGameEntries(this, id, profileState, updatedEntries)
+          for (const { game } of updatedEntries) {
             if (game.achievementSummaryKnown) {
               sync.updatedAppIds.add(String(game.appid))
             }
           }
         }
+        if (invalidEntries.length) commitGameEntries(this, id, profileState, invalidEntries)
         sync.processed = Math.min(sync.total, sync.processed + batch.length)
         sync.pending = Math.max(0, sync.pending - batch.length)
       })
@@ -901,7 +940,26 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
       const gameIndexes = new Map(
         profileState.games.map((game, index) => [String(game.appid), index]),
       )
-      await runBoundedQueue(appIds, FALLBACK_CONCURRENCY, async (appId) => {
+      const pendingEntries = []
+      let completedFallbackCount = 0
+      let flushPromise = Promise.resolve()
+      const flushPendingEntries = () => {
+        if (!pendingEntries.length) return flushPromise
+        const entries = pendingEntries.splice(0)
+        flushPromise = flushPromise.then(() => {
+          commitGameEntries(this, id, profileState, entries)
+          sync.fallbackProcessed = completedFallbackCount
+        })
+        return flushPromise
+      }
+      const enqueueEntry = async (entry) => {
+        pendingEntries.push(entry)
+        completedFallbackCount += 1
+        if (pendingEntries.length >= 24) await flushPendingEntries()
+      }
+
+      try {
+        await runBoundedQueue(appIds, FALLBACK_CONCURRENCY, async (appId) => {
         const gameIndex = gameIndexes.get(String(appId))
         if (gameIndex === undefined) return
         const current = profileState.games[gameIndex]
@@ -928,9 +986,8 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
             achievementSyncAttemptAt: attemptedAt,
             achievementSyncError: lastError?.message || 'fallback_request_failed',
           }
-          updateProfileStats(this, id, current, updated)
-          profileState.games[gameIndex] = updated
           await writeGame(id, updated)
+          await enqueueEntry({ game: updated, gameIndex, previous: current })
         } else {
           const summary = result.summary
           const validUnknown = summary.status === 'unknown'
@@ -958,9 +1015,8 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
               achievementSyncAttemptAt: attemptedAt,
               achievementSyncError: summary.reason || 'steam_unavailable',
             })
-            updateProfileStats(this, id, current, updated)
-            profileState.games[gameIndex] = updated
             await writeGame(id, updated)
+            await enqueueEntry({ game: updated, gameIndex, previous: current })
           } else if (validKnown) {
             const updated = mergeAchievementResult(current, [], summary.available, {
               detailsComplete: false,
@@ -981,8 +1037,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
               groups.set(String(item.appid), bucket)
             }
             await writeAchievementBatch(id, [updated], groups)
-            updateProfileStats(this, id, current, updated)
-            profileState.games[gameIndex] = updated
+            await enqueueEntry({ game: updated, gameIndex, previous: current })
             sync.updatedAppIds.add(String(updated.appid))
           } else {
             sync.errorCount += 1
@@ -992,12 +1047,10 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
               achievementSyncAttemptAt: attemptedAt,
               achievementSyncError: 'invalid_fallback_summary',
             }
-            updateProfileStats(this, id, current, preserved)
-            profileState.games[gameIndex] = preserved
             await writeGame(id, preserved)
+            await enqueueEntry({ game: preserved, gameIndex, previous: current })
           }
         }
-        sync.fallbackProcessed += 1
       }, async (appId, error) => {
         const gameIndex = gameIndexes.get(String(appId))
         if (gameIndex === undefined) return
@@ -1010,12 +1063,13 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           achievementSyncError: error?.message || 'fallback_persistence_failed',
         }
         sync.errorCount += 1
-        sync.fallbackProcessed += 1
-        updateProfileStats(this, id, current, preserved)
-        profileState.games[gameIndex] = preserved
         await writeGame(id, preserved)
+        await enqueueEntry({ game: preserved, gameIndex, previous: current })
         console.warn(`Steam achievement fallback failed for AppID ${appId}.`, error)
-      })
+        })
+      } finally {
+        await flushPendingEntries()
+      }
     },
 
     async storeAchievementResult(steamId, game, achievements, available, summary = {}) {
@@ -1210,12 +1264,12 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           !game.achievementsDetailsComplete ||
           (appId !== undefined && String(game.appid) !== String(appId))
         ) continue
-        games[index] = {
+        games[index] = markRawGameRecord({
           ...game,
           achievements: [],
           achievementsDetailsComplete: false,
           achievementsIconsComplete: false,
-        }
+        })
       }
       if (appId === undefined || this.activeDetailAppIds[id] === String(appId)) {
         delete this.activeDetailAppIds[id]

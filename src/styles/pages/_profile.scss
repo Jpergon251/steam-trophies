@@ -152,6 +152,13 @@
   padding-top: $space-4;
 }
 
+.profile-overview__notice {
+  margin: $space-3 0 0;
+  color: $color-text-tertiary;
+  font-size: $font-size-xs;
+  text-align: center;
+}
+
 .profile-overview__tier {
   display: inline-flex;
   align-items: center;

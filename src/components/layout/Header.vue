@@ -19,8 +19,8 @@
           <RefreshCw class="landing__refresh-icon" :size="17" :stroke-width="1.8" aria-hidden="true" />
           <span class="landing__refresh-label">{{ refreshLabel }}</span>
         </button>
-        <span class="landing__countdown" aria-live="polite">
-          {{ canRefresh ? formattedCountdown : $t('header.refreshing') }}
+        <span v-if="canRefresh" class="landing__countdown" aria-live="polite">
+          {{ formattedCountdown }}
         </span>
       </div>
 

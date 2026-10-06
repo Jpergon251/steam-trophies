@@ -55,7 +55,7 @@ export default {
     openSteamProfile: 'Open Steam profile',
     overview: 'Player collection overview',
     trophyBreakdown: 'Unlocked trophies by tier and completed games',
-    partialStats: 'Partial data · achievement information unavailable for {count} games.',
+    partialStats: 'The numbers shown may differ between platforms.',
     stats: {
       games: 'GAMES',
       trophies: 'TROPHIES',

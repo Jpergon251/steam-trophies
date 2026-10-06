@@ -55,7 +55,7 @@ export default {
     openSteamProfile: 'Abrir perfil de Steam',
     overview: 'Resumen de la colección del jugador',
     trophyBreakdown: 'Trofeos desbloqueados por categoría y juegos completados',
-    partialStats: 'Datos parciales · {count} juegos sin información de logros.',
+    partialStats: 'Los números mostrados pueden ser distintos entre plataformas.',
     stats: {
       games: 'JUEGOS',
       trophies: 'TROFEOS',
@@ -67,7 +67,7 @@ export default {
       loadingCache: 'Cargando colección en caché…',
       updating: 'Actualizando…',
       syncProgress: 'Sincronizando Steam… {processed} / {total}',
-      fallbackProgress: 'Logros sin resumen: {processed} / {total}',
+      fallbackProgress: 'Juegos sin resumen: {processed} / {total}',
       syncComplete: '{checked} juegos comprobados · {updated} actualizados · {newGames} nuevos · {withAchievements} con logros · {withoutInfo} sin información · {errors} errores · {unlocked} logros desbloqueados',
       syncPartial: 'Sincronización parcial · {checked} juegos comprobados · {withoutInfo} sin información · {errors} errores · {unlocked} logros desbloqueados',
     },
