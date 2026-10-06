@@ -432,6 +432,10 @@
 }
 
 .trophy-display-stage--diamond .diamond-trophy {
+  --diamond-center-scale: 1.1;
+  --diamond-adjacent-scale: 0.92;
+  --diamond-distant-scale: 0.86;
+
   position: relative;
   display: flex;
   flex: 0 0 clamp(220px, 26vw, 300px);
@@ -450,7 +454,7 @@
   background-image: none;
   color: $trophy-diamond-light;
   opacity: 1;
-  transform: scale(0.9);
+  transform: scale(var(--diamond-scale, var(--diamond-distant-scale)));
   transform-origin: center;
   scroll-snap-align: center;
   -webkit-mask-image:
@@ -461,24 +465,29 @@
     linear-gradient(to right,  transparent, #000 18%, #000 82%, transparent),
     linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
   mask-composite: intersect;
-  transition:
-    transform var(--display-duration) $ease-expressive,
-    box-shadow var(--display-duration) ease;
+  transition: box-shadow var(--display-duration) ease;
   will-change: transform;
+  cursor: pointer;
+}
+
+.trophy-display-stage--diamond .diamond-trophy__object {
+  will-change: transform;
+}
+
+@media (hover: hover) {
+  .trophy-display-stage--diamond .diamond-trophy:hover .diamond-trophy__object {
+    transform: translateY(-2px);
+  }
+
+  .trophy-display-stage--diamond .diamond-trophy:hover strong,
+  .trophy-display-stage--diamond .diamond-trophy:hover .diamond-trophy__game-name {
+    color: $trophy-diamond-light;
+  }
 }
 
 .trophy-display-stage--diamond .diamond-trophy.is-selected {
   z-index: 5;
-  transform: scale(1.1);
   color: $trophy-diamond-light;
-}
-
-.trophy-display-stage--diamond .diamond-trophy.is-adjacent {
-  transform: scale(0.92);
-}
-
-.trophy-display-stage--diamond .diamond-trophy:not(.is-selected):not(.is-adjacent) {
-  transform: scale(0.86);
 }
 
 
@@ -752,21 +761,13 @@
   }
 
   .trophy-display-stage--diamond .diamond-trophy {
+    --diamond-center-scale: 1.04;
+    --diamond-adjacent-scale: 0.9;
+    --diamond-distant-scale: 0.86;
+
     flex-basis: 220px;
     width: 220px;
     min-height: 300px;
-  }
-
-  .trophy-display-stage--diamond .diamond-trophy.is-selected {
-    transform: scale(1.04);
-  }
-
-  .trophy-display-stage--diamond .diamond-trophy.is-adjacent {
-    transform: scale(0.9);
-  }
-
-  .trophy-display-stage--diamond .diamond-trophy:not(.is-selected):not(.is-adjacent) {
-    transform: scale(0.86);
   }
 
   .trophy-display-stage--diamond .diamond-trophy__object {
@@ -812,13 +813,13 @@
   }
 
   .trophy-display-stage--diamond .diamond-trophy {
+    --diamond-center-scale: 1.02;
+    --diamond-adjacent-scale: 0.92;
+    --diamond-distant-scale: 0.86;
+
     flex-basis: 210px;
     width: 210px;
     min-height: 280px;
-  }
-
-  .trophy-display-stage--diamond .diamond-trophy.is-selected {
-    transform: scale(1.02);
   }
 
   .trophy-display-stage--diamond .diamond-trophy__object {

@@ -64,10 +64,9 @@ let scrollEndTimer = 0;
 let navigationFrame = 0;
 let virtualFrame = 0;
 let resizeObserver;
-let diamondNavigationTarget = null;
-let diamondNavigationRequest = 0;
-let diamondNavigationPending = false;
+let diamondNavigationInProgress = false;
 let originalScrollBehavior = null;
+let originalScrollSnapType = null;
 
 function cancelNavigationAnimation() {
   if (navigationFrame) {
@@ -79,6 +78,10 @@ function cancelNavigationAnimation() {
     rail.value.style.scrollBehavior = originalScrollBehavior;
     originalScrollBehavior = null;
   }
+  if (originalScrollSnapType !== null && rail.value) {
+    rail.value.style.scrollSnapType = originalScrollSnapType;
+    originalScrollSnapType = null;
+  }
 }
 
 function getDisplayCards() {
@@ -87,6 +90,60 @@ function getDisplayCards() {
       ".trophy-card, .diamond-trophy",
     ) || []),
   ];
+}
+
+function measureDiamondScaleMetrics() {
+  if (!props.diamonds || !rail.value || !isDiamondLoop.value) return;
+
+  const cards = getDisplayCards();
+  if (cards.length < 3) return;
+
+  const node = rail.value;
+  const railBounds = node.getBoundingClientRect();
+  const viewportLeft = railBounds.left + (node.offsetWidth - node.clientWidth) / 2;
+  const centers = cards.map((card) => {
+    const bounds = card.getBoundingClientRect();
+    return bounds.left + bounds.width / 2 - viewportLeft + node.scrollLeft;
+  });
+  const stride = Math.abs(centers[3] - centers[2]);
+  if (!stride) return;
+
+  const styles = getComputedStyle(cards[2]);
+  return {
+    cards,
+    centers,
+    stride,
+    centerScale: Number.parseFloat(styles.getPropertyValue("--diamond-center-scale")) || 1.1,
+    adjacentScale: Number.parseFloat(styles.getPropertyValue("--diamond-adjacent-scale")) || 0.92,
+    distantScale: Number.parseFloat(styles.getPropertyValue("--diamond-distant-scale")) || 0.86,
+  };
+}
+
+function updateDiamondScales(metrics = measureDiamondScaleMetrics()) {
+  if (!metrics || !rail.value) return;
+
+  const center = rail.value.scrollLeft + rail.value.clientWidth / 2;
+  const updates = [];
+  let closestCard = null;
+  let closestDistance = Infinity;
+  metrics.cards.forEach((card, index) => {
+    const distance = Math.abs(metrics.centers[index] - center) / metrics.stride;
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestCard = card;
+    }
+    const scale = distance < 1
+      ? metrics.centerScale + (metrics.adjacentScale - metrics.centerScale) * distance
+      : distance < 2
+        ? metrics.adjacentScale + (metrics.distantScale - metrics.adjacentScale) * (distance - 1)
+        : metrics.distantScale;
+    updates.push({ card, scale });
+  });
+  updates.forEach(({ card, scale }) => {
+    card.style.setProperty("--diamond-scale", scale.toFixed(3));
+    card.style.zIndex = "1";
+  });
+  if (closestCard) closestCard.style.zIndex = "5";
 }
 
 function updateVirtualWindow() {
@@ -142,13 +199,10 @@ function onVirtualRailScroll() {
   });
 }
 
-function centerCard(card, behavior = "smooth") {
+function centerCard(card, behavior = "smooth", onComplete) {
   if (!rail.value || !card) return;
 
-  if (navigationFrame) {
-    cancelAnimationFrame(navigationFrame);
-    navigationFrame = 0;
-  }
+  cancelNavigationAnimation();
 
   const node = rail.value;
   const railRect = rail.value.getBoundingClientRect();
@@ -161,40 +215,54 @@ function centerCard(card, behavior = "smooth") {
 
   const target = rail.value.scrollLeft + delta;
 
-  if (behavior !== "smooth") {
-    if (originalScrollBehavior === null) {
-      originalScrollBehavior = node.style.scrollBehavior;
-    }
+  const prefersReducedMotion = window.matchMedia?.(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  if (behavior !== "smooth" || prefersReducedMotion) {
+    const originalBehavior = node.style.scrollBehavior;
+    const originalSnapType = node.style.scrollSnapType;
     node.style.scrollBehavior = "auto";
+    node.style.scrollSnapType = "none";
     node.scrollLeft = target;
-    node.style.scrollBehavior = originalScrollBehavior;
-    originalScrollBehavior = null;
+    node.style.scrollBehavior = originalBehavior;
+    node.style.scrollSnapType = originalSnapType;
+    onComplete?.();
     return;
   }
 
   if (originalScrollBehavior === null) {
     originalScrollBehavior = node.style.scrollBehavior;
+    originalScrollSnapType = node.style.scrollSnapType;
   }
   node.style.scrollBehavior = "auto";
+  node.style.scrollSnapType = "none";
 
   const start = node.scrollLeft;
   const distance = target - start;
   const startedAt = performance.now();
-  const duration = 180;
+  const duration = 650;
+  const scaleMetrics = props.diamonds ? measureDiamondScaleMetrics() : null;
 
   const animate = (now) => {
     const progress = Math.min((now - startedAt) / duration, 1);
-    const easedProgress = 1 - (1 - progress) ** 3;
+    const easedProgress = progress < 0.5
+      ? 4 * progress ** 3
+      : 1 - ((-2 * progress + 2) ** 3) / 2;
 
     if (!rail.value) return;
     node.scrollLeft = start + distance * easedProgress;
+    if (scaleMetrics) updateDiamondScales(scaleMetrics);
 
     if (progress < 1) {
       navigationFrame = requestAnimationFrame(animate);
     } else {
       navigationFrame = 0;
       node.style.scrollBehavior = originalScrollBehavior ?? "";
+      node.style.scrollSnapType = originalScrollSnapType ?? "";
       originalScrollBehavior = null;
+      originalScrollSnapType = null;
+      onComplete?.();
     }
   };
 
@@ -203,7 +271,6 @@ function centerCard(card, behavior = "smooth") {
 
 function syncDiamondSelection(recenter = false) {
   if (!props.diamonds) return;
-  if (diamondNavigationPending && !recenter) return;
 
   const cards = getDisplayCards();
 
@@ -244,15 +311,10 @@ function syncDiamondSelection(recenter = false) {
     windowAnchorIndex.value = selectedVirtualIndex;
     requestAnimationFrame(() => {
       centerCard(getDisplayCards()[2], "auto");
+      updateDiamondScales();
     });
   }
 
-  if (recenter) {
-    diamondNavigationTarget = selectedVirtualIndex;
-    diamondNavigationPending = false;
-  } else if (!diamondNavigationPending) {
-    diamondNavigationTarget = selectedVirtualIndex;
-  }
 }
 
 function scrollToIndex(index, behavior = "smooth") {
@@ -296,20 +358,7 @@ function scrollToIndex(index, behavior = "smooth") {
 
 function scrollToVirtualIndex(virtualIndex, behavior = "smooth") {
   if (isDiamondLoop.value) {
-    cancelNavigationAnimation();
-    diamondNavigationTarget = virtualIndex;
-    diamondNavigationPending = true;
-    windowAnchorIndex.value = virtualIndex;
-    activeVirtualIndex.value = virtualIndex;
-    activeIndex.value =
-      ((virtualIndex % props.trophies.length) + props.trophies.length) %
-      props.trophies.length;
-    const request = ++diamondNavigationRequest;
-
-    nextTick(() => {
-      if (request !== diamondNavigationRequest) return;
-      centerCard(getDisplayCards()[2], behavior);
-    });
+    startDiamondNavigation(virtualIndex);
     return;
   }
 
@@ -324,25 +373,40 @@ function scrollToVirtualIndex(virtualIndex, behavior = "smooth") {
   centerCard(card, behavior);
 }
 
+function startDiamondNavigation(targetIndex) {
+  if (!isDiamondLoop.value || !rail.value || diamondNavigationInProgress) return;
+
+  const card = getDisplayCards().find(
+    (item) => Number(item.dataset.virtualIndex) === targetIndex,
+  );
+  if (!card || targetIndex === activeVirtualIndex.value) return;
+
+  diamondNavigationInProgress = true;
+  if (scrollFrame) {
+    cancelAnimationFrame(scrollFrame);
+    scrollFrame = 0;
+  }
+  clearTimeout(scrollEndTimer);
+  centerCard(card, "smooth", () => {
+    activeVirtualIndex.value = targetIndex;
+    activeIndex.value =
+      ((targetIndex % props.trophies.length) + props.trophies.length) %
+      props.trophies.length;
+    windowAnchorIndex.value = targetIndex;
+
+    nextTick(() => {
+      centerCard(getDisplayCards()[2], "auto");
+      updateDiamondScales();
+      diamondNavigationInProgress = false;
+    });
+  });
+}
+
 function scrollByShelf(direction) {
   if (props.diamonds) {
     if (isDiamondLoop.value) {
-      cancelNavigationAnimation();
-      const target =
-        (diamondNavigationTarget ?? activeVirtualIndex.value) + direction;
-      diamondNavigationTarget = target;
-      diamondNavigationPending = true;
-      windowAnchorIndex.value = target;
-      activeVirtualIndex.value = target;
-      activeIndex.value =
-        ((target % props.trophies.length) + props.trophies.length) %
-        props.trophies.length;
-      const request = ++diamondNavigationRequest;
-
-      nextTick(() => {
-        if (request !== diamondNavigationRequest) return;
-        centerCard(getDisplayCards()[2]);
-      });
+      if (diamondNavigationInProgress) return;
+      startDiamondNavigation(activeVirtualIndex.value + direction);
       return;
     }
 
@@ -366,8 +430,7 @@ watch(
     activeIndex.value = 0;
     activeVirtualIndex.value = 0;
     windowAnchorIndex.value = 0;
-    diamondNavigationTarget = 0;
-    diamondNavigationPending = false;
+    diamondNavigationInProgress = false;
 
     await nextTick();
 
@@ -375,6 +438,7 @@ watch(
       if (isDiamondLoop.value && rail.value) {
         const cards = getDisplayCards();
         centerCard(cards[2], "auto");
+        updateDiamondScales();
       } else if (props.diamonds) {
         scrollToIndex(0, "auto");
       }
@@ -409,18 +473,22 @@ function onRailScroll() {
     return;
   }
 
+  if (diamondNavigationInProgress) return;
+
   if (scrollFrame) {
     cancelAnimationFrame(scrollFrame);
   }
 
-  scrollFrame = requestAnimationFrame(() => syncDiamondSelection());
+  scrollFrame = requestAnimationFrame(() => {
+    updateDiamondScales();
+    syncDiamondSelection();
+  });
 
   clearTimeout(scrollEndTimer);
 
-  scrollEndTimer = window.setTimeout(
-    () => syncDiamondSelection(true),
-    120,
-  );
+  if (!diamondNavigationInProgress) {
+    scrollEndTimer = window.setTimeout(() => syncDiamondSelection(true), 120);
+  }
 }
 
 function onTouchStart(event) {
@@ -475,8 +543,11 @@ function onDragStart(event) {
     return;
   }
 
-  cancelAnimationFrame(navigationFrame);
-  navigationFrame = 0;
+  if (props.diamonds) {
+    cancelNavigationAnimation();
+    syncDiamondSelection();
+    diamondNavigationInProgress = false;
+  }
 
   dragState = {
     pointerId: event.pointerId,
@@ -536,6 +607,10 @@ function onDragEnd(event) {
   }
 
   dragState = null;
+  if (props.diamonds) {
+    clearTimeout(scrollEndTimer);
+    scrollEndTimer = window.setTimeout(() => syncDiamondSelection(true), 120);
+  }
 }
 
 onBeforeUnmount(() => {
@@ -650,6 +725,7 @@ onBeforeUnmount(() => {
               v-for="{ item: game, virtualIndex } in indexedTrophies"
               :key="virtualIndex"
               class="diamond-trophy"
+              :data-virtual-index="virtualIndex"
               :class="{
                 'is-selected':
                   isDiamondLoop &&

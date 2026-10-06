@@ -1,34 +1,96 @@
 import asyncio
-import os
+import json
+import logging
+import random
 import re
+import time
 from urllib.parse import urlparse
 
 import httpx
-from dotenv import load_dotenv
+from app.cache import steam_cache
+from app.config import settings
+from app.metrics import current_request_metrics
 
-load_dotenv()
+logger = logging.getLogger(__name__)
 
-STEAM_API_KEY = os.getenv("STEAM_API_KEY")
 STEAM_API_BASE = "https://api.steampowered.com"
-
 STEAM_ID64_PATTERN = re.compile(r"^\d{17}$")
+_http_client: httpx.AsyncClient | None = None
+_steam_semaphore: asyncio.Semaphore | None = None
 
 
-async def steam_request(endpoint: str, params: dict):
-    if not STEAM_API_KEY:
+def configure_steam_runtime(
+    client: httpx.AsyncClient | None,
+    semaphore: asyncio.Semaphore | None,
+) -> None:
+    global _http_client, _steam_semaphore
+    _http_client = client
+    _steam_semaphore = semaphore
+
+
+def _cache_ttl(endpoint: str) -> int:
+    if "GetPlayerSummaries" in endpoint or "ResolveVanityURL" in endpoint:
+        return settings.cache_profile_ttl
+    if "GetOwnedGames" in endpoint:
+        return settings.cache_games_ttl
+    if "GetPlayerAchievements" in endpoint:
+        return settings.cache_achievements_ttl
+    if "GetGlobalAchievementPercentages" in endpoint:
+        return settings.cache_global_achievements_ttl
+    return settings.cache_negative_ttl
+
+
+async def steam_request(endpoint: str, params: dict, *, force_refresh: bool = False):
+    if not settings.steam_api_key:
         raise RuntimeError("STEAM_API_KEY is not configured")
+    if _http_client is None or _steam_semaphore is None:
+        raise RuntimeError("Steam HTTP client is not initialized.")
 
-    params["key"] = STEAM_API_KEY
+    cache_key = f"steam:{endpoint}:{json.dumps(params, sort_keys=True, separators=(',', ':'))}"
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"{STEAM_API_BASE}/{endpoint}",
-            params=params,
-        )
+    async def load_response():
+        for attempt in range(settings.steam_max_retries + 1):
+            metrics = current_request_metrics.get()
+            wait_started = time.perf_counter()
+            try:
+                async with _steam_semaphore:
+                    if metrics is not None:
+                        metrics.steam_wait_ms += (time.perf_counter() - wait_started) * 1000
+                        metrics.steam_requests += 1
+                    request_started = time.perf_counter()
+                    try:
+                        response = await _http_client.get(
+                            f"{STEAM_API_BASE}/{endpoint}",
+                            params={**params, "key": settings.steam_api_key},
+                        )
+                    finally:
+                        if metrics is not None:
+                            metrics.steam_time_ms += (
+                                time.perf_counter() - request_started
+                            ) * 1000
+                    response.raise_for_status()
+                    return response.json()
+            except httpx.HTTPStatusError as error:
+                retryable = error.response.status_code in {429, 500, 502, 503, 504}
+                if not retryable or attempt >= settings.steam_max_retries:
+                    raise
+            except (httpx.TimeoutException, httpx.NetworkError):
+                if attempt >= settings.steam_max_retries:
+                    raise
 
-    response.raise_for_status()
+            if metrics is not None:
+                metrics.retries += 1
+            await asyncio.sleep(random.uniform(0.5 * (2 ** attempt), 1.0 * (2 ** attempt)))
 
-    return response.json()
+        raise RuntimeError("Steam retry loop ended unexpectedly.")
+
+    return await steam_cache.get_or_create(
+        cache_key,
+        _cache_ttl(endpoint),
+        load_response,
+        negative_ttl=settings.cache_negative_ttl,
+        force_refresh=force_refresh,
+    )
 
 
 async def get_player_summary(steam_id: str):
@@ -64,16 +126,50 @@ async def get_owned_games(steam_id: str):
         },
     )
 
-async def get_player_achievements(steam_id: str, app_id: int):
+async def get_player_achievements(
+    steam_id: str,
+    app_id: int,
+    *,
+    force_refresh: bool = False,
+):
     if not STEAM_ID64_PATTERN.fullmatch(steam_id):
         raise ValueError("A valid SteamID64 is required.")
     if app_id <= 0:
         raise ValueError("A valid app ID is required.")
 
+    async def load_achievements():
+        return await _load_player_achievements(
+            steam_id,
+            app_id,
+            force_refresh=force_refresh,
+        )
+
+    result = await steam_cache.get_or_create(
+        f"achievements:{steam_id}:{app_id}",
+        settings.cache_achievements_ttl,
+        load_achievements,
+        negative_ttl=settings.cache_negative_achievements_ttl,
+        is_negative=lambda value: (
+            value.get("available") is False
+            or value.get("_short_cache") is True
+        ),
+        force_refresh=force_refresh,
+    )
+    result.pop("_short_cache", None)
+    return result
+
+
+async def _load_player_achievements(
+    steam_id: str,
+    app_id: int,
+    *,
+    force_refresh: bool = False,
+):
     try:
         achievements_data = await steam_request(
             "ISteamUserStats/GetPlayerAchievements/v1/",
             {"steamid": steam_id, "appid": app_id, "l": "english"},
+            force_refresh=force_refresh,
         )
     except httpx.HTTPStatusError as error:
         if error.response.status_code == 400:
@@ -99,12 +195,19 @@ async def get_player_achievements(steam_id: str, app_id: int):
                     }
         raise
 
+    global_percentages_available = True
     try:
         global_data = await steam_request(
             "ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/",
             {"gameid": app_id},
         )
-    except Exception:
+    except (httpx.HTTPError, ValueError) as error:
+        global_percentages_available = False
+        logger.debug(
+            "Steam global achievement percentages unavailable for app %s (%s).",
+            app_id,
+            type(error).__name__,
+        )
         global_data = {}
 
     global_achievements = {
@@ -127,6 +230,7 @@ async def get_player_achievements(steam_id: str, app_id: int):
         "achievements": achievements,
         "achievement_count": len(achievements),
         "available": bool(player_response.get("success")),
+        "_short_cache": not global_percentages_available,
     }
 
 

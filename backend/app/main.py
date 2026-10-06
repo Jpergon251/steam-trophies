@@ -1,9 +1,17 @@
+import asyncio
 import logging
+import re
+import time
+from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from app.config import settings
+from app.metrics import RequestMetrics, current_request_metrics, masked_steam_id
 from app.services.steam import (
+    configure_steam_runtime,
     get_owned_games,
     get_player_achievements,
     get_steam_profile,
@@ -12,8 +20,53 @@ from app.services.steam import (
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Steam Trophies API")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    timeout = httpx.Timeout(
+        connect=settings.steam_timeout_connect,
+        read=settings.steam_timeout_read,
+        write=settings.steam_timeout_write,
+        pool=settings.steam_timeout_pool,
+    )
+    limits = httpx.Limits(
+        max_connections=settings.steam_max_connections,
+        max_keepalive_connections=settings.steam_max_keepalive_connections,
+    )
+    client = httpx.AsyncClient(timeout=timeout, limits=limits)
+    configure_steam_runtime(client, asyncio.Semaphore(settings.steam_max_concurrency))
+    try:
+        yield
+    finally:
+        configure_steam_runtime(None, None)
+        await client.aclose()
+
+
+class InMemoryRateLimiter:
+    def __init__(self):
+        self._requests: dict[tuple[str, str], tuple[float, int]] = {}
+
+    def check(self, client_ip: str, group: str, limit: int) -> tuple[bool, int]:
+        now = time.monotonic()
+        window = settings.rate_limit_window_seconds
+        if len(self._requests) > 10_000:
+            self._requests = {
+                key: value for key, value in self._requests.items()
+                if now - value[0] < window
+            }
+
+        key = (client_ip, group)
+        start, count = self._requests.get(key, (now, 0))
+        if now - start >= window:
+            start, count = now, 0
+        if count >= limit:
+            return False, max(1, int(window - (now - start)))
+        self._requests[key] = (start, count + 1)
+        return True, 0
+
+
+rate_limiter = InMemoryRateLimiter()
+app = FastAPI(title="Steam Trophies API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,6 +80,76 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_STEAM_ID_IN_PATH = re.compile(r"/profile/(\d{17})(/|$)")
+
+
+def _request_identity(request: Request) -> tuple[str, str | None]:
+    path = request.url.path
+    steam_id = request.query_params.get("steam_id")
+    match = _STEAM_ID_IN_PATH.search(path)
+    if match:
+        steam_id = match.group(1)
+    return path, steam_id
+
+
+def _rate_limit_group(path: str) -> tuple[str, int] | None:
+    if path == "/api/steam/search":
+        return "search", settings.rate_limit_search
+    if path.endswith("/achievements"):
+        return "achievements", settings.rate_limit_achievements
+    if path.endswith("/games"):
+        return "games", settings.rate_limit_games
+    if path == "/api/steam/profile":
+        return "profile", settings.rate_limit_profile
+    return None
+
+
+@app.middleware("http")
+async def observe_and_limit_requests(request: Request, call_next):
+    if request.url.path == "/api/health":
+        return await call_next(request)
+
+    path, steam_id = _request_identity(request)
+    group = _rate_limit_group(path)
+    if group and request.method != "OPTIONS":
+        client_ip = request.client.host if request.client else "unknown"
+        allowed, retry_after = rate_limiter.check(client_ip, group[0], group[1])
+        if not allowed:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many requests. Please try again shortly."},
+                headers={"Retry-After": str(retry_after)},
+            )
+
+    metrics = RequestMetrics()
+    token = current_request_metrics.set(metrics)
+    started = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        current_request_metrics.reset(token)
+        if request.url.path.startswith("/api/steam/"):
+            logger.info(
+                "Steam API request endpoint=%s steam_id=%s status=%s total_ms=%.1f "
+                "steam_ms=%.1f steam_wait_ms=%.1f steam_requests=%s cache_hits=%s "
+                "cache_misses=%s deduplicated=%s retries=%s games=%s",
+                _STEAM_ID_IN_PATH.sub(r"/profile/{steam_id}\2", path),
+                masked_steam_id(steam_id),
+                status_code,
+                (time.perf_counter() - started) * 1000,
+                metrics.steam_time_ms,
+                metrics.steam_wait_ms,
+                metrics.steam_requests,
+                metrics.cache_hits,
+                metrics.cache_misses,
+                metrics.deduplicated,
+                metrics.retries,
+                metrics.games_count if metrics.games_count is not None else "n/a",
+            )
+
 
 @app.get("/api/steam/search")
 async def steam_search(q: str = Query(..., min_length=1)):
@@ -35,21 +158,36 @@ async def steam_search(q: str = Query(..., min_length=1)):
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     except Exception as error:
-        raise HTTPException(status_code=502, detail=str(error))
+        logger.warning("Steam profile search failed (%s).", type(error).__name__)
+        raise HTTPException(status_code=502, detail="Steam profile search is not available right now.")
 
 @app.get("/api/steam/profile/{steam_id}/games")
 async def steam_games(steam_id: str):
     try:
-        return await get_owned_games(steam_id)
+        result = await get_owned_games(steam_id)
+        games = result.get("response", {}).get("games", [])
+        metrics = current_request_metrics.get()
+        if metrics is not None:
+            metrics.games_count = len(games) if isinstance(games, list) else 0
+        return result
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
-    except Exception:
+    except Exception as error:
+        logger.warning("Steam games request failed (%s).", type(error).__name__)
         raise HTTPException(status_code=502, detail="Steam games are not available right now.")
 
 @app.get("/api/steam/profile/{steam_id}/games/{app_id}/achievements")
-async def steam_achievements(steam_id: str, app_id: int):
+async def steam_achievements(
+    steam_id: str,
+    app_id: int,
+    force_refresh: bool = False,
+):
     try:
-        return await get_player_achievements(steam_id, app_id)
+        return await get_player_achievements(
+            steam_id,
+            app_id,
+            force_refresh=force_refresh,
+        )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     except Exception as error:
@@ -58,7 +196,7 @@ async def steam_achievements(steam_id: str, app_id: int):
             if isinstance(error, httpx.HTTPStatusError)
             else None
         )
-        logger.error(
+        logger.warning(
             "Steam achievements request failed for app %s (%s, upstream status: %s)",
             app_id,
             type(error).__name__,
@@ -75,4 +213,10 @@ async def steam_profile(steam_id: str = Query(..., min_length=1)):
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error))
     except Exception as error:
-        raise HTTPException(status_code=502, detail=str(error))
+        logger.warning("Steam profile request failed (%s).", type(error).__name__)
+        raise HTTPException(status_code=502, detail="Steam profile is not available right now.")
+
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}

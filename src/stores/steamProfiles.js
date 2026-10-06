@@ -186,6 +186,31 @@ function isAchievementDataStale(game, now = Date.now()) {
   return now - game.achievementsUpdatedAt >= ACHIEVEMENT_CACHE_TTL
 }
 
+function shouldForceAchievementRefresh(game, now = Date.now()) {
+  if (
+    !game?.achievementsUpdatedAt ||
+    game.achievementsAvailable === false
+  ) {
+    return false
+  }
+
+  const playtimeForever = Number(game.playtime_forever || 0)
+  const achievementsPlaytime = Number(game.achievementsPlaytime || 0)
+  const lastPlayedSec = Number(game.rtime_last_played || 0)
+  const checkedSec = Math.floor(game.achievementsUpdatedAt / 1000)
+  const playedInLast2Weeks = Number(game.playtime_2weeks || 0) > 0
+  const playedInLast24h =
+    lastPlayedSec > 0 &&
+    Math.floor(now / 1000) - lastPlayedSec < 86400
+
+  return (
+    playtimeForever > achievementsPlaytime ||
+    lastPlayedSec > checkedSec ||
+    ((playedInLast2Weeks || playedInLast24h) &&
+      now - game.achievementsUpdatedAt >= ACTIVE_GAME_CACHE_TTL)
+  )
+}
+
 function isSteamGameChanged(next, previous) {
   return !previous || Number(previous.playtime_forever) !== Number(next.playtime_forever)
     || Number(previous.playtime_2weeks) !== Number(next.playtime_2weeks)
@@ -431,7 +456,9 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           const game = queue.shift()
           if (!game) return
           try {
-            const result = await getSteamAchievements(id, game.appid)
+            const result = await getSteamAchievements(id, game.appid, {
+              forceRefresh: shouldForceAchievementRefresh(game),
+            })
             // A game without stats is a valid outcome, not an error.
             if (result?.available === false) {
               await this.storeAchievementResult(id, game, [], false)
