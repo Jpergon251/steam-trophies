@@ -15,19 +15,23 @@ const appid = computed(() => String(route.params.appid || ''))
 const profileState = computed(() => steamStore.profiles[steamId.value])
 const profile = computed(() => steamStore.profileFor(steamId.value))
 const game = computed(() => steamStore.gamesFor(steamId.value).find((item) => String(item.appid) === appid.value) || null)
+const detailsPending = ref(false)
+const detailsError = ref(null)
 const isLoading = computed(() => {
-  if (game.value) return false
+  if (detailsPending.value) return true
+  if (game.value) return !game.value.achievementsDetailsComplete && !detailsError.value
   if (!profileState.value?.hydratedAt) return !steamStore.errorFor(steamId.value)
   return Boolean(steamStore.syncs[steamId.value]?.active && steamStore.syncs[steamId.value]?.phase === 'library')
 })
-const loadError = computed(() => steamStore.errorFor(steamId.value))
+const loadError = computed(() => detailsError.value || steamStore.errorFor(steamId.value))
 const sync = computed(() => steamStore.syncs[steamId.value] || null)
 const achievements = computed(() => game.value?.achievements || [])
 const isUnlocked = (achievement) => achievement.achieved === true || Number(achievement.achieved) === 1
 const achievementTier = (achievement) => getTrophyTier(achievement.global_percent) || 'unclassified'
 const counts = computed(() => {
-  const unlocked = achievements.value.filter(isUnlocked).length
-  return { total: achievements.value.length, unlocked, locked: achievements.value.length - unlocked }
+  const total = Number(game.value?.achievementCount) || 0
+  const unlocked = Number(game.value?.unlockedCount) || 0
+  return { total, unlocked, locked: Math.max(0, total - unlocked) }
 })
 const completion = computed(() => counts.value.total ? Math.round(counts.value.unlocked / counts.value.total * 1000) / 10 : 0)
 const isDiamond = computed(() => counts.value.total > 0 && counts.value.unlocked === counts.value.total)
@@ -116,9 +120,18 @@ const backQuery = computed(() => {
   return query
 })
 
-watch([steamId, appid], async ([id]) => {
+watch([steamId, appid], async ([id, gameId]) => {
   if (!id) return
-  if (!steamStore.profiles[id]?.hydratedAt) await steamStore.loadProfile(id)
+  detailsError.value = null
+  detailsPending.value = true
+  try {
+    if (!steamStore.profiles[id]?.hydratedAt) await steamStore.loadProfile(id)
+    await steamStore.loadGameAchievementDetails(id, gameId)
+  } catch (error) {
+    detailsError.value = error
+  } finally {
+    detailsPending.value = false
+  }
 }, { immediate: true })
 
 watch(appid, () => {
@@ -136,7 +149,7 @@ watch(appid, () => {
         {{ $t('game.loadingArchive') }}
       </div>
 
-      <section v-else-if="!game" class="game-page__state" :role="loadError ? 'alert' : 'status'">
+      <section v-else-if="!game || detailsError" class="game-page__state" :role="loadError ? 'alert' : 'status'">
         <Trophy :size="26" :stroke-width="1.2" aria-hidden="true" />
         <h1>{{ loadError ? $t('game.archiveUnavailable') : $t('game.gameNotFound') }}</h1>
         <p>{{ loadError ? $t('game.errorRefresh') : $t('game.removedFromLibrary') }}</p>

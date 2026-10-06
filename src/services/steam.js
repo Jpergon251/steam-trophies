@@ -85,6 +85,15 @@ export function getSteamGames(steamId, options) {
   return requestSteamJson(`/api/steam/profile/${encodeURIComponent(steamId)}/games`, options)
 }
 
+export function getSteamAchievementSummaries(steamId, options) {
+  const { forceRefresh = false, ...requestOptions } = options || {}
+  const query = forceRefresh ? '?force_refresh=true' : ''
+  return requestSteamJson(
+    `/api/steam/profile/${encodeURIComponent(steamId)}/achievements${query}`,
+    requestOptions,
+  )
+}
+
 export function getSteamAchievements(steamId, appId, options = {}) {
   const { forceRefresh = false, ...requestOptions } = options
   const query = forceRefresh ? '?force_refresh=true' : ''

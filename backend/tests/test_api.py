@@ -47,27 +47,77 @@ class ApiCompatibilityTests(unittest.IsolatedAsyncioTestCase):
         profile = {"response": {"players": [{"steamid": STEAM_ID}]}}
         games = {"response": {"games": [{"appid": 10, "name": "Example"}]}}
         achievements = {"game": {"appid": 10}, "achievements": [], "available": True}
+        summary = {"steamid": STEAM_ID, "games": [], "errors": {}}
         with (
             patch("app.main.search_steam_profile", new=AsyncMock(return_value=profile)),
             patch("app.main.get_steam_profile", new=AsyncMock(return_value=profile)),
             patch("app.main.get_owned_games", new=AsyncMock(return_value=games)),
+            patch("app.main.get_achievement_summaries", new=AsyncMock(return_value=summary)),
             patch("app.main.get_player_achievements", new=AsyncMock(return_value=achievements)),
         ):
             responses = await asyncio.gather(
                 request_app("/api/steam/search?q=example", client_port=5201),
                 request_app(f"/api/steam/profile?steam_id={STEAM_ID}", client_port=5202),
                 request_app(f"/api/steam/profile/{STEAM_ID}/games", client_port=5203),
+                request_app(f"/api/steam/profile/{STEAM_ID}/achievements", client_port=5211),
                 request_app(
                     f"/api/steam/profile/{STEAM_ID}/games/10/achievements",
                     client_port=5204,
                 ),
             )
 
-        self.assertEqual([response.status_code for response in responses], [200] * 4)
+        self.assertEqual([response.status_code for response in responses], [200] * 5)
         self.assertEqual(
             [response.json() for response in responses],
-            [profile, profile, games, achievements],
+            [profile, profile, games, summary, achievements],
         )
+
+    async def test_summary_route_forwards_force_refresh_and_keeps_cors_on_errors(self):
+        with patch(
+            "app.main.get_achievement_summaries",
+            new=AsyncMock(return_value={"steamid": STEAM_ID, "games": [], "errors": {}}),
+        ) as mocked:
+            response = await request_app(
+                f"/api/steam/profile/{STEAM_ID}/achievements?force_refresh=true",
+                headers={"Origin": "https://jpergon251.github.io"},
+                client_port=5212,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.headers.get("access-control-allow-origin"),
+            "https://jpergon251.github.io",
+        )
+        mocked.assert_awaited_once_with(STEAM_ID, force_refresh=True)
+
+    async def test_summary_upstream_error_is_cors_enabled_and_logged(self):
+        upstream_request = httpx.Request("GET", "https://api.steampowered.com/")
+        upstream_response = httpx.Response(429, request=upstream_request)
+        upstream_error = httpx.HTTPStatusError(
+            "Steam rate limit",
+            request=upstream_request,
+            response=upstream_response,
+        )
+        with (
+            patch(
+                "app.main.get_achievement_summaries",
+                new=AsyncMock(side_effect=upstream_error),
+            ),
+            self.assertLogs("app.main", level="WARNING") as logs,
+        ):
+            response = await request_app(
+                f"/api/steam/profile/{STEAM_ID}/achievements",
+                headers={"Origin": "https://jpergon251.github.io"},
+                client_ip="127.0.0.36",
+            )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(
+            response.headers.get("access-control-allow-origin"),
+            "https://jpergon251.github.io",
+        )
+        self.assertIn("original_status=429", "\n".join(logs.output))
+        self.assertIn("final_status=502", "\n".join(logs.output))
 
     async def test_force_refresh_parameter_is_optional_and_forwarded(self):
         with patch(

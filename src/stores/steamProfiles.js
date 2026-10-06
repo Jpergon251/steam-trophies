@@ -1,5 +1,10 @@
 import { defineStore } from 'pinia'
-import { getSteamAchievements, getSteamGames, getSteamProfile } from '../services/steam.js'
+import {
+  getSteamAchievementSummaries,
+  getSteamAchievements,
+  getSteamGames,
+  getSteamProfile,
+} from '../services/steam.js'
 import { getTrophyTier } from '../data/trophyTiers.js'
 import {
   CACHE_TTL,
@@ -18,10 +23,6 @@ import {
 const ACHIEVEMENT_CACHE_TTL = 30 * 60 * 1000
 const ACTIVE_GAME_CACHE_TTL = 60 * 1000
 const NEGATIVE_ACHIEVEMENT_CACHE_TTL = 5 * 60 * 1000
-// Keep concurrent Steam achievement requests bounded. Steam's API is rate
-// limited and firing 100+ requests at once is what triggered the previous
-// implementation's instability.
-const ACHIEVEMENT_CONCURRENCY = 3
 
 function getArtUrls(game) {
   if (!game || !game.appid) {
@@ -62,7 +63,7 @@ function decorateAchievements(game, achievements = []) {
   })
 }
 
-function deriveGame(game, achievements = [], available = null, updatedAt = 0) {
+function deriveGame(game, achievements = [], available = null, updatedAt = 0, summary = {}) {
   const normalizedAchievements = (achievements || []).map((achievement) => {
     const achieved = achievement.achieved === true || Number(achievement.achieved) === 1
     const percent = achievement.global_percent != null && Number.isFinite(Number(achievement.global_percent))
@@ -82,8 +83,15 @@ function deriveGame(game, achievements = [], available = null, updatedAt = 0) {
     }
   })
   const unlocked = normalizedAchievements.filter((achievement) => achievement.achieved)
-  const achievementCount = normalizedAchievements.length
-  const unlockedCount = unlocked.length
+  const detailsComplete = summary.detailsComplete
+    ?? game.achievementsDetailsComplete
+    ?? Boolean(updatedAt && available !== null)
+  const achievementCount = detailsComplete
+    ? normalizedAchievements.length
+    : Number(summary.achievementCount ?? game.achievementCount ?? game.totalAchievements) || 0
+  const unlockedCount = detailsComplete
+    ? unlocked.length
+    : Number(summary.unlockedCount ?? game.unlockedCount ?? game.unlockedAchievements) || 0
   const isDiamond = Boolean(achievementCount > 0 && unlockedCount === achievementCount)
   const progress = achievementCount ? Math.round((unlockedCount / achievementCount) * 100) : 0
 
@@ -110,6 +118,7 @@ function deriveGame(game, achievements = [], available = null, updatedAt = 0) {
     rtime_last_played: rtimeLastPlayed,
     ...getArtUrls(game),
     achievements: normalizedAchievements,
+    achievementsDetailsComplete: Boolean(detailsComplete),
     achievementsAvailable: available == null ? null : available !== false,
     achievementCount,
     totalAchievements: achievementCount,
@@ -139,6 +148,11 @@ function fromCache(game) {
     game.achievements || [],
     game.achievementsAvailable,
     game.achievementsUpdatedAt || 0,
+    {
+      achievementCount: game.achievementCount,
+      unlockedCount: game.unlockedCount,
+      detailsComplete: game.achievementsDetailsComplete,
+    },
   )
 }
 
@@ -152,7 +166,11 @@ function makeLibraryGame(rawGame, previous) {
   const achievements = previous?.achievements || []
   const available = previous?.achievementsAvailable ?? null
   const updatedAt = previous?.achievementsUpdatedAt || 0
-  return deriveGame(merged, achievements, available, updatedAt)
+  return deriveGame(merged, achievements, available, updatedAt, {
+    achievementCount: previous?.achievementCount,
+    unlockedCount: previous?.unlockedCount,
+    detailsComplete: previous?.achievementsDetailsComplete,
+  })
 }
 
 function isAchievementDataStale(game, now = Date.now()) {
@@ -232,6 +250,8 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
     syncPromises: {},
     // In-flight progressive achievement refresh promises keyed by steamId.
     achievementPromises: {},
+    // In-flight detail requests keyed by steamId and appid.
+    detailPromises: {},
   }),
   getters: {
     profileFor: (state) => (steamId) => state.profiles[String(steamId)]?.profile || null,
@@ -291,7 +311,12 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
                 ? gameRecord.achievementsAvailable
                 : null
             const updatedAt = achEntry?.cachedAt || (hasLegacyAchievements ? gameRecord.achievementsUpdatedAt : 0)
-            return deriveGame(gameRecord, achievements, available, updatedAt)
+            return deriveGame(gameRecord, achievements, available, updatedAt, {
+              achievementCount: gameRecord.achievementCount,
+              unlockedCount: gameRecord.unlockedCount,
+              detailsComplete: achEntry?.detailsComplete
+                ?? gameRecord.achievementsDetailsComplete,
+            })
           })
 
           this.profiles[id] = {
@@ -396,35 +421,34 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           }
         }
 
-        // Progressive achievement processing starts only after the collection
-        // is already visible. Each game is persisted individually as it lands.
-        const gamesToRefresh = this.achievementPromises[id]
-          ? []
-          : nextGames.filter((game) => isAchievementDataStale(game, Date.now()))
+        // The library is persisted before requesting batched summaries.
+        const summariesAreStale = nextGames.some((game) =>
+          isAchievementDataStale(game, Date.now()),
+        )
 
-        // Prioritize actively played games first so new trophies show immediately
-        gamesToRefresh.sort((a, b) => {
-          const scoreA = (Number(a.playtime_2weeks) > 0 ? 10000 : 0) + (Number(a.rtime_last_played) || 0)
-          const scoreB = (Number(b.playtime_2weeks) > 0 ? 10000 : 0) + (Number(b.rtime_last_played) || 0)
-          return scoreB - scoreA
-        })
-
-        if (gamesToRefresh.length) {
+        if (summariesAreStale && !this.achievementPromises[id]) {
           this.syncs[id] = {
             active: true,
             processed: 0,
-            total: gamesToRefresh.length,
+            total: nextGames.length,
             stale: hadCache,
             phase: 'achievements',
           }
-          const refresh = this.refreshAchievements(id, gamesToRefresh)
+          const forceRefresh = nextGames.some((game) =>
+            shouldForceAchievementRefresh(game),
+          )
+          const refresh = this.refreshAchievementSummaries(
+            id,
+            nextGames,
+            forceRefresh,
+          )
           this.achievementPromises[id] = refresh.finally(() => {
             delete this.achievementPromises[id]
             if (this.syncs[id]?.phase === 'achievements') {
               this.syncs[id] = {
                 active: false,
-                processed: this.syncs[id].processed,
-                total: gamesToRefresh.length,
+                processed: this.syncs[id].total,
+                total: nextGames.length,
                 stale: hadCache,
                 phase: 'idle',
               }
@@ -446,51 +470,57 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
       }
     },
 
-    /** Processes achievements with bounded concurrency and per-game isolation. */
-    async refreshAchievements(steamId, gamesToRefresh) {
+    /** Loads unlocked-game summaries in one cached backend request. */
+    async refreshAchievementSummaries(steamId, games, forceRefresh = false) {
       const id = String(steamId)
-      const queue = [...gamesToRefresh]
-      const total = queue.length
-      let rateLimitError = null
-      const workers = Array.from({ length: Math.min(ACHIEVEMENT_CONCURRENCY, total) }, async () => {
-        while (queue.length && !rateLimitError) {
-          const game = queue.shift()
-          if (!game) return
-          try {
-            const result = await getSteamAchievements(id, game.appid, {
-              forceRefresh: shouldForceAchievementRefresh(game),
-            })
-            // A game without stats is a valid outcome, not an error.
-            if (result?.available === false) {
-              await this.storeAchievementResult(id, game, [], false)
-            } else {
-              const achievements = decorateAchievements(game, result?.achievements || [])
-              await this.storeAchievementResult(id, game, achievements, true)
-            }
-          } catch (error) {
-            if (error?.status === 429) {
-              rateLimitError = error
-              this.errors[id] = error
-              console.warn(
-                `Achievement refresh paused after rate limiting at ${game.name}; remaining games stay stale and eligible for the next sync.`,
-                error,
-              )
-            } else {
-              console.warn(
-                `Keeping cached achievements for ${game.name} after a temporary refresh failure.`,
-                error,
-              )
-            }
-          } finally {
-            const sync = this.syncs[id]
-            if (sync && sync.phase === 'achievements') sync.processed += 1
-          }
+      try {
+        const response = await getSteamAchievementSummaries(id, {
+          forceRefresh,
+        })
+        if (!Array.isArray(response?.games) || !response?.errors || typeof response.errors !== 'object') {
+          throw new Error('Steam returned an invalid achievement summary response.')
         }
-      })
-      await Promise.all(workers)
+        const gamesById = new Map(games.map((game) => [String(game.appid), game]))
+        const summaries = Array.isArray(response?.games) ? response.games : []
+        let invalidSummaries = 0
+        for (const summary of summaries) {
+          const game = gamesById.get(String(summary.appid))
+          if (!game) continue
+          if (
+            typeof summary.available !== 'boolean' ||
+            !Array.isArray(summary.achievements) ||
+            !Number.isInteger(summary.achievement_count) ||
+            !Number.isInteger(summary.unlocked_count)
+          ) {
+            invalidSummaries += 1
+            continue
+          }
+          const achievements = decorateAchievements(game, summary.achievements || [])
+          await this.storeAchievementResult(id, game, achievements, summary.available, {
+            detailsComplete: summary.details_complete === true,
+            achievementCount: summary.achievement_count,
+            unlockedCount: summary.unlocked_count,
+          })
+        }
+        if (invalidSummaries) {
+          console.warn(`Steam returned ${invalidSummaries} malformed achievement summaries; cached data was retained for those games.`)
+        }
+        const failedSummaries = Object.entries(response?.errors || {})
+        if (failedSummaries.length) {
+          const examples = failedSummaries.slice(0, 10).map(([appid]) => appid).join(', ')
+          console.warn(
+            `${failedSummaries.length} Steam achievement summaries remain unavailable (AppIDs: ${examples}${failedSummaries.length > 10 ? ', …' : ''}).`,
+          )
+        }
+        const sync = this.syncs[id]
+        if (sync?.phase === 'achievements') sync.processed = games.length
+      } catch (error) {
+        this.errors[id] = error
+        console.warn('Could not refresh batched Steam achievement summaries; cached data remains available.', error)
+      }
     },
 
-    async storeAchievementResult(steamId, game, achievements, available) {
+    async storeAchievementResult(steamId, game, achievements, available, summary = {}) {
       const id = String(steamId)
       const profileState = this.profiles[id]
       if (!profileState) return
@@ -521,7 +551,21 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           tier: getTrophyTier(percent) || prev.tier || 'bronze',
         }
       })
-      const derived = deriveGame(profileState.games[index], mergedAchievements, available, Date.now())
+      const currentGame = profileState.games[index]
+      const derived = deriveGame(
+        {
+          ...currentGame,
+          achievementsPlaytime: Number(currentGame.playtime_forever) || 0,
+        },
+        mergedAchievements,
+        available,
+        Date.now(),
+        {
+          achievementCount: summary.achievementCount,
+          unlockedCount: summary.unlockedCount,
+          detailsComplete: summary.detailsComplete ?? true,
+        },
+      )
       profileState.games.splice(index, 1, derived)
 
       const cleanGame = serializeGame(derived)
@@ -534,11 +578,48 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
             achievements: cleanAchievements,
             available,
             cachedAt: derived.achievementsUpdatedAt,
+            detailsComplete: derived.achievementsDetailsComplete,
           }),
         ])
       } catch (persistenceError) {
         console.error(`Failed to persist achievements for game ${game.name} (${game.appid}):`, persistenceError)
       }
+    },
+
+    async loadGameAchievementDetails(steamId, appId) {
+      const id = String(steamId)
+      const key = `${id}:${String(appId)}`
+      if (!this.profiles[id]?.hydratedAt) await this.syncProfile(id)
+      else if (this.syncPromises[id]) await this.syncPromises[id]
+      if (this.achievementPromises[id]) await this.achievementPromises[id]
+      const game = this.profiles[id]?.games.find((item) => String(item.appid) === String(appId))
+      if (!game || game.achievementsDetailsComplete) return game
+      if (this.detailPromises[key]) return this.detailPromises[key]
+
+      const promise = (async () => {
+        const result = await getSteamAchievements(id, appId, {
+          forceRefresh: shouldForceAchievementRefresh(game),
+        })
+        const currentGame = this.profiles[id]?.games.find(
+          (item) => String(item.appid) === String(appId),
+        )
+        if (!currentGame) return null
+        const achievements = decorateAchievements(currentGame, result?.achievements || [])
+        await this.storeAchievementResult(
+          id,
+          currentGame,
+          achievements,
+          result?.available !== false,
+          { detailsComplete: true },
+        )
+        return this.profiles[id]?.games.find(
+          (item) => String(item.appid) === String(appId),
+        )
+      })().finally(() => {
+        delete this.detailPromises[key]
+      })
+      this.detailPromises[key] = promise
+      return promise
     },
 
     /** Drops in-memory state for a profile. IndexedDB is intentionally untouched. */

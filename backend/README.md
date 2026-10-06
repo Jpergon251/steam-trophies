@@ -23,44 +23,74 @@ The suite includes a mock load scenario with three profiles and 300 game
 requests. It prints cold/warm duration, upstream call count, cache hits, and
 maximum observed concurrency without contacting Steam.
 
+## Experimental Steam achievement endpoint comparison
+
+The undocumented `IPlayerService/GetTopAchievementsForGames` and
+`IPlayerService/GetAchievementsProgress` methods can be probed without changing
+the production profile flow:
+
+```sh
+python scripts/diagnose_achievement_endpoints.py <17-digit-steamid>
+```
+
+This makes one request with all owned AppIDs to each experimental method and,
+by default, one `GetPlayerAchievements` request per game at concurrency two.
+It stops issuing legacy requests after a Steam 429. A one-game probe can inspect
+the returned fields or vary `max_achievements`:
+
+```sh
+python scripts/diagnose_achievement_endpoints.py <steamid> \
+  --probe-top-appid <owned-appid> --top-limit 1000
+```
+
+The reported one-request AppID list only establishes whether that tested list
+was accepted; it does not claim to establish Steam's maximum batch size. The
+tool uses the configured API key but never prints it. It is an opt-in diagnostic
+and is not used by FastAPI routes.
+
 `GET /api/health` is a local FastAPI health check and does not contact Steam.
 
 ## Current profile request flow
 
 The Vue store loads the profile and owned-games list first, displays that
-library, then processes stale achievements progressively with three workers per
-browser profile. Grid/list changes use that same local store and do not call the
-backend. The backend retains the existing routes and response shapes:
+library, then requests one batched unlocked-achievements summary for stale
+games. The backend reuses the owned-games cache and requests
+`GetTopAchievementsForGames` in configurable batches. Full achievement catalogs
+are fetched from the retained legacy route only when a game detail page is
+opened (or an individual Top result is missing, malformed, or reaches the
+configured result cap). Grid/list changes use the same local store and do not
+call the backend. The backend routes are:
 
 - `GET /api/steam/search?q=...`
 - `GET /api/steam/profile?steam_id=...`
 - `GET /api/steam/profile/{steam_id}/games`
+- `GET /api/steam/profile/{steam_id}/achievements`
 - `GET /api/steam/profile/{steam_id}/games/{app_id}/achievements`
 
-Before caching, a cold profile page with `X` games made **2 + 2X** Steam API
-requests: one player summary, one owned-games request, and up to two requests
-per game (player achievements and global achievement percentages). A game
-whose stats are unavailable uses one player-achievements request. If loaded
-through the search page, the pre-optimization total was up to **3 + 2X** for a
-SteamID64 search or **4 + 2X** for a vanity URL (resolution, summary, then the
-profile page's summary and library requests).
+Before this optimization, a cold profile with `N` games could make up to
+**2 + 2N** Steam API requests: player summary, owned games, then individual
+player-achievement and global-percentage requests. The initial summary path
+now makes **2 + ceil(N / TOP_ACHIEVEMENTS_BATCH_SIZE)** Steam requests at most
+(player summary, owned games, and batched Top results). With the default batch
+size of 164, a 164-game profile uses three Steam requests total before any
+detail page is opened. A detail page retains the legacy fallback and may make
+one player-achievement request plus one shared/cached global-percentage request.
 
-With the current cache, the cold profile page remains at up to **2 + 2X**
-requests. Searching by SteamID first reuses the summary for the following
-profile request; a vanity search is up to **3 + 2X** due to its one resolution.
-Repeated requests for the same profile and games make zero upstream calls
-within their TTLs, and repeated achievements requests do too unless the
-frontend signals that an already-known active game's unlock state needs a
-fresh check. Global percentages are shared across Steam users for the same
-app ID, so only the first cold lookup per game needs that second request during
-the global-percentage TTL.
+The summary endpoint reuses the same owned-games cache as the library route.
+Identical Top batches share cached responses and in-flight requests. An active
+game can pass `force_refresh=true` to bypass its Top response cache when a
+fresh unlock is needed.
 
-Achievements remain progressive; there is no backend endpoint that downloads
-every game's achievements before returning the library. The per-game request
-also caches its combined result. The existing active-game refresh includes the
-optional `force_refresh=true` query parameter so a fresh unlock is not hidden
-behind the normal achievement cache. That refresh still reuses the app-wide
-global percentages cache.
+`TOP_ACHIEVEMENTS_MAX` defaults to 1000 and `TOP_ACHIEVEMENTS_BATCH_SIZE`
+defaults to 164, the largest multi-AppID batch verified for this application.
+The Top method is not part of the published official Web API contract. Results
+contain unlocked entries and aggregate totals, not the full locked catalogue,
+API names, or unlock timestamps. Entries missing from a partly valid response
+are repaired individually, with a limit of ten fallbacks per batch; an empty or
+failed multi-game batch is reported instead of triggering a mass legacy
+fallback. A result list reaching `TOP_ACHIEVEMENTS_MAX` is treated as possibly
+truncated and falls back for that game. All Steam responses reuse the existing
+in-memory cache and in-flight request coalescing.
 
 ## Resource controls
 
@@ -98,6 +128,7 @@ the defaults and supported names:
 - `CACHE_PROFILE_TTL`, `CACHE_GAMES_TTL`, `CACHE_ACHIEVEMENTS_TTL`,
   `CACHE_GLOBAL_ACHIEVEMENTS_TTL`, `CACHE_NEGATIVE_TTL`,
   `CACHE_NEGATIVE_ACHIEVEMENTS_TTL`, `CACHE_MAX_ENTRIES`, `CACHE_MAX_BYTES`
+- `TOP_ACHIEVEMENTS_MAX`, `TOP_ACHIEVEMENTS_BATCH_SIZE`
 - `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_SEARCH_PER_MINUTE`,
   `RATE_LIMIT_PROFILE_PER_MINUTE`, `RATE_LIMIT_GAMES_PER_MINUTE`,
   `RATE_LIMIT_ACHIEVEMENTS_PER_MINUTE`

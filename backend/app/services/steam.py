@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 STEAM_API_BASE = "https://api.steampowered.com"
 STEAM_ID64_PATTERN = re.compile(r"^\d{17}$")
+MAX_LEGACY_FALLBACKS_PER_BATCH = 10
 _http_client: httpx.AsyncClient | None = None
 
 
@@ -65,7 +66,7 @@ def _cache_ttl(endpoint: str) -> int:
         return settings.cache_profile_ttl
     if "GetOwnedGames" in endpoint:
         return settings.cache_games_ttl
-    if "GetPlayerAchievements" in endpoint:
+    if "GetPlayerAchievements" in endpoint or "GetTopAchievementsForGames" in endpoint:
         return settings.cache_achievements_ttl
     if "GetGlobalAchievementPercentages" in endpoint:
         return settings.cache_global_achievements_ttl
@@ -171,6 +172,262 @@ async def get_owned_games(steam_id: str):
             "format": "json",
         },
     )
+
+
+async def get_achievement_summaries(steam_id: str, *, force_refresh: bool = False):
+    if not STEAM_ID64_PATTERN.fullmatch(steam_id):
+        raise ValueError("A valid SteamID64 is required.")
+
+    owned_games = await get_owned_games(steam_id)
+    games = owned_games.get("response", {}).get("games", [])
+    if not isinstance(games, list):
+        raise ValueError("Steam returned an invalid owned-games collection.")
+
+    games_by_id = {
+        int(game["appid"]): game
+        for game in games
+        if isinstance(game, dict) and str(game.get("appid", "")).isdigit()
+    }
+    app_ids = sorted(games_by_id)
+    if not app_ids:
+        return {"steamid": steam_id, "games": [], "errors": {}}
+
+    summaries: dict[int, dict] = {}
+    errors: dict[int, dict] = {}
+    batch_size = settings.top_achievements_batch_size
+    for offset in range(0, len(app_ids), batch_size):
+        batch = app_ids[offset:offset + batch_size]
+        params = {
+            "steamid": steam_id,
+            "language": "english",
+            "max_achievements": settings.top_achievements_max,
+            **{f"appids[{index}]": app_id for index, app_id in enumerate(batch)},
+        }
+        try:
+            response = await steam_request(
+                "IPlayerService/GetTopAchievementsForGames/v1/",
+                params,
+                force_refresh=force_refresh,
+            )
+        except Exception as error:
+            status = (
+                error.response.status_code
+                if isinstance(error, httpx.HTTPStatusError)
+                else None
+            )
+            logger.warning(
+                "Steam achievement summary batch failed batch_size=%s "
+                "status=%s reason=%s",
+                len(batch),
+                status or "n/a",
+                type(error).__name__,
+            )
+            if len(batch) <= MAX_LEGACY_FALLBACKS_PER_BATCH:
+                fallback_summaries, fallback_errors = await _legacy_summaries_for_batch(
+                    steam_id,
+                    batch,
+                    games_by_id,
+                )
+                summaries.update(fallback_summaries)
+                errors.update(fallback_errors)
+                continue
+            for app_id in batch:
+                errors[app_id] = {
+                    "status": status,
+                    "reason": "top_request_failed",
+                }
+            continue
+
+        response_data = response.get("response")
+        top_games = response_data.get("games") if isinstance(response_data, dict) else None
+        if not isinstance(top_games, list):
+            logger.warning(
+                "Steam achievement summary returned an unexpected shape for %s AppIDs.",
+                len(batch),
+            )
+            if len(batch) <= MAX_LEGACY_FALLBACKS_PER_BATCH:
+                fallback_summaries, fallback_errors = await _legacy_summaries_for_batch(
+                    steam_id,
+                    batch,
+                    games_by_id,
+                )
+                summaries.update(fallback_summaries)
+                errors.update(fallback_errors)
+                continue
+            for app_id in batch:
+                errors[app_id] = {"status": None, "reason": "invalid_top_response"}
+            continue
+
+        top_by_id = {
+            int(game["appid"]): game
+            for game in top_games
+            if isinstance(game, dict) and str(game.get("appid", "")).isdigit()
+        }
+        if not top_by_id:
+            if len(batch) <= MAX_LEGACY_FALLBACKS_PER_BATCH:
+                fallback_summaries, fallback_errors = await _legacy_summaries_for_batch(
+                    steam_id,
+                    batch,
+                    games_by_id,
+                )
+                summaries.update(fallback_summaries)
+                errors.update(fallback_errors)
+            else:
+                for app_id in batch:
+                    errors[app_id] = {"status": None, "reason": "empty_top_batch"}
+            continue
+
+        needs_fallback = []
+        for app_id in batch:
+            top_game = top_by_id.get(app_id)
+            normalized = _normalize_top_summary(
+                app_id,
+                games_by_id[app_id],
+                top_game,
+            )
+            if normalized is None:
+                needs_fallback.append(app_id)
+            else:
+                summaries[app_id] = normalized
+
+        # Do not turn an incomplete batch into hundreds of legacy requests.
+        # A small number of individually missing/truncated entries is safe to
+        # repair; larger gaps are reported for detail-on-demand instead.
+        if len(needs_fallback) > MAX_LEGACY_FALLBACKS_PER_BATCH:
+            logger.warning(
+                "Steam top summary omitted %s games in a batch; skipping bulk fallback.",
+                len(needs_fallback),
+            )
+            for app_id in needs_fallback:
+                errors[app_id] = {
+                    "status": None,
+                    "reason": "fallback_limit_reached",
+                }
+            needs_fallback = []
+        fallback_summaries, fallback_errors = await _legacy_summaries_for_batch(
+            steam_id,
+            needs_fallback,
+            games_by_id,
+        )
+        summaries.update(fallback_summaries)
+        errors.update(fallback_errors)
+
+    return {
+        "steamid": steam_id,
+        "games": [summaries[app_id] for app_id in app_ids if app_id in summaries],
+        "errors": {str(app_id): error for app_id, error in errors.items()},
+    }
+
+
+def _normalize_top_summary(app_id: int, owned_game: dict, top_game: dict | None):
+    if not isinstance(top_game, dict):
+        return None
+    total = top_game.get("total_achievements")
+    achievements = top_game.get("achievements")
+    if (
+        not isinstance(total, int)
+        or isinstance(total, bool)
+        or total < 0
+        or not isinstance(achievements, list)
+        or len(achievements) > total
+        or len(achievements) >= settings.top_achievements_max
+    ):
+        return None
+
+    unlocked = []
+    for item in achievements:
+        if not isinstance(item, dict):
+            return None
+        percent = item.get("player_percent_unlocked")
+        try:
+            percent = float(percent) if percent is not None else None
+        except (TypeError, ValueError):
+            percent = None
+        unlocked.append({
+            "name": item.get("name") or "",
+            "description": item.get("desc") or "",
+            "achieved": True,
+            "unlocktime": None,
+            "icon": item.get("icon") or "",
+            "icongray": item.get("icon_gray") or "",
+            "global_percent": percent,
+            "hidden": item.get("hidden"),
+        })
+
+    return {
+        "appid": app_id,
+        "game": {
+            "appid": app_id,
+            "name": owned_game.get("name") or top_game.get("name") or "",
+        },
+        "achievements": unlocked,
+        "achievement_count": total,
+        "unlocked_count": len(unlocked),
+        "available": True,
+        "details_complete": False,
+        "source": "top",
+    }
+
+
+async def _legacy_achievement_summary(steam_id: str, app_id: int, owned_game: dict):
+    result = await get_player_achievements(steam_id, app_id)
+    achievements = result.get("achievements", [])
+    unlocked_count = sum(
+        1
+        for achievement in achievements
+        if achievement.get("achieved") is True
+        or str(achievement.get("achieved", "")) == "1"
+    )
+    return {
+        "appid": app_id,
+        "game": {
+            "appid": app_id,
+            "name": result.get("game", {}).get("name") or owned_game.get("name") or "",
+        },
+        "achievements": achievements,
+        "achievement_count": result.get("achievement_count", len(achievements)),
+        "unlocked_count": unlocked_count,
+        "available": result.get("available", False),
+        "details_complete": True,
+        "source": "legacy_fallback",
+        "reason": result.get("reason"),
+    }
+
+
+async def _legacy_summaries_for_batch(
+    steam_id: str,
+    app_ids: list[int],
+    games_by_id: dict[int, dict],
+):
+    summaries = {}
+    errors = {}
+    for app_id in app_ids:
+        try:
+            summaries[app_id] = await _legacy_achievement_summary(
+                steam_id,
+                app_id,
+                games_by_id[app_id],
+            )
+        except Exception as error:
+            status = (
+                error.response.status_code
+                if isinstance(error, httpx.HTTPStatusError)
+                else None
+            )
+            logger.warning(
+                "Steam legacy achievement summary fallback failed appid=%s "
+                "game=%s status=%s reason=%s",
+                app_id,
+                games_by_id[app_id].get("name", ""),
+                status or "n/a",
+                type(error).__name__,
+            )
+            errors[app_id] = {
+                "status": status,
+                "reason": "legacy_fallback_failed",
+            }
+    return summaries, errors
+
 
 async def get_player_achievements(
     steam_id: str,

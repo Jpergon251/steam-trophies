@@ -172,7 +172,7 @@ export function serializeAchievement(achievement) {
     : null;
   const tier = String(achievement.tier || getTrophyTier(globalPercent) || 'bronze');
   return {
-    apiname: String(achievement.apiname || achievement.name || ''),
+    apiname: achievement.apiname ? String(achievement.apiname) : null,
     name: String(achievement.name || achievement.apiname || ''),
     description: String(achievement.description || ''),
     achieved,
@@ -180,6 +180,7 @@ export function serializeAchievement(achievement) {
     icon: String(achievement.icon || ''),
     icongray: String(achievement.icongray || ''),
     global_percent: globalPercent,
+    hidden: achievement.hidden ?? null,
     tier,
     appid: String(achievement.appid || ''),
     gameName: String(achievement.gameName || ''),
@@ -197,10 +198,14 @@ export function serializeGame(game) {
     ? game.achievements.map(serializeAchievement).filter(Boolean)
     : [];
   const unlocked = achievements.filter((a) => a.achieved);
-  const achievementCount = achievements.length || Number(game.achievementCount || game.totalAchievements || game.achievement_count) || 0;
-  const unlockedCount = achievements.length
+  const detailsComplete = game.achievementsDetailsComplete
+    ?? Boolean(game.achievementsUpdatedAt && game.achievementsAvailable !== null);
+  const achievementCount = detailsComplete
+    ? achievements.length
+    : Number(game.achievementCount ?? game.totalAchievements ?? game.achievement_count) || 0;
+  const unlockedCount = detailsComplete
     ? unlocked.length
-    : Number(game.unlockedCount || game.unlockedAchievements || game.achievements_unlocked) || 0;
+    : Number(game.unlockedCount ?? game.unlockedAchievements ?? game.achievements_unlocked) || 0;
   const progress = achievementCount ? Math.round((unlockedCount / achievementCount) * 100) : Number(game.progress || game.completion) || 0;
   const isDiamond = Boolean(achievementCount > 0 && unlockedCount === achievementCount);
 
@@ -210,7 +215,7 @@ export function serializeGame(game) {
     gold: 0,
     diamond: isDiamond ? 1 : 0,
   };
-  if (achievements.length) {
+  if (detailsComplete && achievements.length) {
     for (const a of unlocked) {
       const tier = a.tier || getTrophyTier(a.global_percent) || 'bronze';
       if (tierCounts[tier] !== undefined) tierCounts[tier] += 1;
@@ -240,6 +245,7 @@ export function serializeGame(game) {
     headerUrl: String(game.headerUrl || ''),
     fallbackUrl: String(game.fallbackUrl || ''),
     achievements,
+    achievementsDetailsComplete: Boolean(detailsComplete),
     achievementsAvailable: game.achievementsAvailable ?? null,
     achievementCount,
     totalAchievements: achievementCount,
@@ -320,6 +326,7 @@ export async function readProfileSnapshot(steamId) {
       achievements: rawList.map(serializeAchievement).filter(Boolean),
       available: record.available !== false,
       cachedAt: Number(record.cachedAt) || 0,
+      detailsComplete: record.detailsComplete ?? true,
     };
   }
 
@@ -333,6 +340,7 @@ export async function readProfileSnapshot(steamId) {
         achievements: game.achievements.map(serializeAchievement).filter(Boolean),
         available: game.achievementsAvailable !== false,
         cachedAt: Number(game.achievementsUpdatedAt || game.cachedAt) || 0,
+        detailsComplete: game.achievementsDetailsComplete ?? true,
       };
     }
   }
@@ -348,6 +356,7 @@ export async function readProfileSnapshot(steamId) {
       achievements,
       achievementsAvailable: available,
       achievementsUpdatedAt: updatedAt,
+      achievementsDetailsComplete: ach?.detailsComplete ?? game.achievementsDetailsComplete,
     });
   }).filter(Boolean);
 
@@ -463,7 +472,7 @@ export async function writeGame(steamId, game) {
 export async function writeAchievements(
   steamId,
   appid,
-  { achievements, available, cachedAt = Date.now() },
+  { achievements, available, cachedAt = Date.now(), detailsComplete = true },
 ) {
   const id = normalizeId(steamId);
   const cleanAchievements = Array.isArray(achievements)
@@ -477,6 +486,7 @@ export async function writeAchievements(
     appid: toAppId(appid),
     achievements: cleanAchievements,
     available: available !== false,
+    detailsComplete: Boolean(detailsComplete),
     cachedAt: Number(cachedAt) || Date.now(),
   });
   await done;

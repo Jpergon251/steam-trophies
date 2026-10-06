@@ -14,6 +14,7 @@ from app.services.steam import (
     configure_steam_runtime,
     get_owned_games,
     get_player_achievements,
+    get_achievement_summaries,
     get_steam_profile,
     search_steam_profile,
     SteamConcurrencyLimiter,
@@ -204,6 +205,46 @@ async def steam_games(steam_id: str):
     except Exception as error:
         logger.warning("Steam games request failed (%s).", type(error).__name__)
         raise HTTPException(status_code=502, detail="Steam games are not available right now.")
+
+@app.get("/api/steam/profile/{steam_id}/achievements")
+async def steam_achievement_summaries(steam_id: str, force_refresh: bool = False):
+    try:
+        result = await get_achievement_summaries(
+            steam_id,
+            force_refresh=force_refresh,
+        )
+        metrics = current_request_metrics.get()
+        if metrics is not None:
+            metrics.games_count = len(result.get("games", []))
+        return result
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except Exception as error:
+        upstream_status = (
+            error.response.status_code
+            if isinstance(error, httpx.HTTPStatusError)
+            else None
+        )
+        metrics = current_request_metrics.get()
+        if metrics is not None:
+            metrics.upstream_status = upstream_status
+            metrics.failure_reason = (
+                "steam_rate_limited"
+                if upstream_status == 429
+                else "upstream_error" if upstream_status is not None
+                else type(error).__name__
+            )
+        logger.warning(
+            "steam_achievement_summary_failure steam_id=%s original_status=%s "
+            "final_status=502 reason=%s",
+            masked_steam_id(steam_id),
+            upstream_status or "n/a",
+            "steam_rate_limited" if upstream_status == 429 else type(error).__name__,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Steam achievement summaries are not available right now.",
+        )
 
 @app.get("/api/steam/profile/{steam_id}/games/{app_id}/achievements")
 async def steam_achievements(

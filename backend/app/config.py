@@ -37,6 +37,8 @@ class Settings:
     cache_negative_achievements_ttl = _int_setting("CACHE_NEGATIVE_ACHIEVEMENTS_TTL", 300)
     cache_max_entries = _int_setting("CACHE_MAX_ENTRIES", 4096)
     cache_max_bytes = _int_setting("CACHE_MAX_BYTES", 67_108_864)
+    top_achievements_max = _int_setting("TOP_ACHIEVEMENTS_MAX", 1000)
+    top_achievements_batch_size = _int_setting("TOP_ACHIEVEMENTS_BATCH_SIZE", 164)
 
     rate_limit_window_seconds = _int_setting("RATE_LIMIT_WINDOW_SECONDS", 60)
     rate_limit_search = _int_setting("RATE_LIMIT_SEARCH_PER_MINUTE", 20)
