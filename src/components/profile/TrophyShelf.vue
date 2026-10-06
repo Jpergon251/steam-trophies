@@ -9,6 +9,8 @@ const props = defineProps({
   tier: { type: String, required: true },
   label: { type: String, required: true },
   trophies: { type: Array, default: () => [] },
+  totalCount: { type: Number, default: null },
+  loadWindow: { type: Function, default: null },
   loading: { type: Boolean, default: false },
   diamonds: { type: Boolean, default: false },
   compact: { type: Boolean, default: false },
@@ -23,13 +25,16 @@ const activeVirtualIndex = ref(0);
 const windowAnchorIndex = ref(0);
 const touchStart = ref(null);
 const virtualStart = ref(0);
-const virtualEnd = ref(Math.min(props.trophies.length, 30));
+const virtualEnd = ref(Math.min(props.totalCount ?? props.trophies.length, 30));
+const windowStart = ref(0);
+const windowTrophies = ref([]);
 const beforeSpacerWidth = ref(0);
 const afterSpacerWidth = ref(0);
 const railWidth = ref(0);
 const railPaddingStart = ref(0);
 const itemGap = ref(0);
 const cardWidth = ref(208);
+const trophyCount = computed(() => props.totalCount ?? props.trophies.length);
 
 const isDiamondLoop = computed(
   () => props.diamonds && props.trophies.length > 2,
@@ -67,6 +72,7 @@ let resizeObserver;
 let diamondNavigationInProgress = false;
 let originalScrollBehavior = null;
 let originalScrollSnapType = null;
+let windowRequestId = 0;
 
 function cancelNavigationAnimation() {
   if (navigationFrame) {
@@ -147,12 +153,12 @@ function updateDiamondScales(metrics = measureDiamondScaleMetrics()) {
 }
 
 function updateVirtualWindow() {
-  const count = props.trophies.length;
+  const count = trophyCount.value;
   const stride = cardWidth.value + itemGap.value;
 
   if (!rail.value || !count || stride <= 0) {
     virtualStart.value = 0;
-    virtualEnd.value = count;
+    virtualEnd.value = Math.min(count, 30);
     beforeSpacerWidth.value = 0;
     afterSpacerWidth.value = 0;
     return;
@@ -180,6 +186,32 @@ function updateVirtualWindow() {
   if (beforeWidth !== beforeSpacerWidth.value) beforeSpacerWidth.value = beforeWidth;
   if (afterWidth !== afterSpacerWidth.value) afterSpacerWidth.value = afterWidth;
 }
+
+watch(
+  [trophyCount, virtualStart, virtualEnd],
+  async ([count, start, end]) => {
+    if (props.diamonds || !props.loadWindow) return;
+    const requestId = ++windowRequestId;
+    if (!count || end <= start) {
+      windowTrophies.value = [];
+      windowStart.value = start;
+      return;
+    }
+    try {
+      const result = await props.loadWindow(start, end);
+      if (requestId !== windowRequestId) return;
+      windowTrophies.value = result;
+      windowStart.value = start;
+    } catch (error) {
+      if (requestId === windowRequestId) {
+        console.warn(`Could not read ${props.tier} trophy window from cache.`, error);
+        windowTrophies.value = [];
+        windowStart.value = start;
+      }
+    }
+  },
+  { immediate: true },
+);
 
 function measureVirtualRail() {
   if (!rail.value || !track.value) return;
@@ -427,24 +459,22 @@ function scrollByShelf(direction) {
 }
 
 watch(
-  () => props.trophies.length,
-  async () => {
-    activeIndex.value = 0;
-    activeVirtualIndex.value = 0;
-    windowAnchorIndex.value = 0;
-    diamondNavigationInProgress = false;
-
+  trophyCount,
+  async (count, previousCount) => {
+    if (props.diamonds && count !== previousCount) {
+      activeIndex.value = 0;
+      activeVirtualIndex.value = 0;
+      windowAnchorIndex.value = 0;
+      diamondNavigationInProgress = false;
+    }
     await nextTick();
-
     requestAnimationFrame(() => {
-      if (isDiamondLoop.value && rail.value) {
-        const cards = getDisplayCards();
-        centerCard(cards[2], "auto");
+      if (props.diamonds && isDiamondLoop.value && rail.value) {
+        centerCard(getDisplayCards()[2], "auto");
         updateDiamondScales();
-      } else if (props.diamonds) {
-        scrollToIndex(0, "auto");
+      } else if (!props.diamonds) {
+        measureVirtualRail();
       }
-      if (!props.diamonds) measureVirtualRail();
     });
   },
   { immediate: true },
@@ -658,12 +688,12 @@ onBeforeUnmount(() => {
         <span v-if="loading">…</span>
 
         <span v-else>
-          {{ trophies.length }}
+          {{ trophyCount }}
         </span>
 
         <small>
           {{
-            trophies.length === 1
+            trophyCount === 1
               ? diamonds
                 ? "game"
                 : "trophy"
@@ -677,7 +707,7 @@ onBeforeUnmount(() => {
 
     <div
       v-if="
-        !trophies.length &&
+        !trophyCount &&
         !loading &&
         !compact
       "
@@ -691,7 +721,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div
-      v-else-if="trophies.length"
+      v-else-if="trophyCount"
       class="trophy-display-stage"
       :class="{
         'trophy-display-stage--diamond':
@@ -789,9 +819,9 @@ onBeforeUnmount(() => {
 
           <VirtualTrophyRail
             v-else
-            :trophies="trophies"
-            :start="virtualStart"
-            :end="virtualEnd"
+            :trophies="windowTrophies"
+            :start="windowStart"
+            :end="windowStart + windowTrophies.length"
             :before-width="beforeSpacerWidth"
             :after-width="afterSpacerWidth"
             @select="emit('select', {
@@ -811,7 +841,7 @@ onBeforeUnmount(() => {
         :aria-label="`${label} showcase navigation`"
       >
         <button
-          v-if="trophies.length > 1"
+          v-if="trophyCount > 1"
           class="trophy-display-stage__arrow trophy-display-stage__arrow--previous"
           type="button"
           :aria-label="`Previous ${label} trophy`"
@@ -826,11 +856,11 @@ onBeforeUnmount(() => {
         >
           {{ String(activeIndex + 1).padStart(2, "0") }}
           /
-          {{ String(trophies.length).padStart(2, "0") }}
+          {{ String(trophyCount).padStart(2, "0") }}
         </span>
 
         <button
-          v-if="trophies.length > 1"
+          v-if="trophyCount > 1"
           class="trophy-display-stage__arrow trophy-display-stage__arrow--next"
           type="button"
           :aria-label="`Next ${label} trophy`"

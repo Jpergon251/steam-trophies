@@ -21,7 +21,6 @@ const selectedTrophy = ref(null)
 const steamId = computed(() => String(route.params.steamId || ''))
 const profile = computed(() => activeSteamId.value === steamId.value ? steamStore.profileFor(steamId.value) : null)
 const games = computed(() => activeSteamId.value === steamId.value ? steamStore.gamesFor(steamId.value) : [])
-const trophyCollection = computed(() => activeSteamId.value === steamId.value ? steamStore.trophiesFor(steamId.value) : [])
 const gameByAppId = computed(() => new Map(games.value.map((game) => [String(game.appid), game])))
 const profileStats = computed(() => games.value.reduce((stats, game) => {
   const tiers = game.tierCounts || game.trophyCounts || {}
@@ -35,12 +34,8 @@ const unlockedTrophyCount = computed(() =>
   profileStats.value.bronze + profileStats.value.silver + profileStats.value.gold,
 )
 const achievementSummariesKnown = computed(() =>
-  games.value.length === 0 || games.value.every((game) =>
-    game.achievementsAvailable === true ||
-    game.achievementsAvailable === false ||
-    Number(game.achievementsUpdatedAt) > 0 ||
-    (Array.isArray(game.achievements) && game.achievements.length > 0),
-  ),
+  games.value.length === 0 ||
+  games.value.every((game) => game.achievementSummaryVersion === 1),
 )
 const gamesStatus = computed(() => steamStore.errorFor(steamId.value) && !games.value.length ? 'error' : profile.value ? 'success' : 'loading')
 const syncState = computed(() => steamStore.syncs[steamId.value] || null)
@@ -112,15 +107,9 @@ async function openGame({ game, context }) {
   })
 }
 
-async function loadVisibleAchievementIcons(appId) {
-  try {
-    await steamStore.loadVisibleAchievementIcons(steamId.value, appId)
-  } catch (error) {
-    console.warn(
-      `Could not load achievement icons for Steam game ${appId}; keeping the available trophy fallback.`,
-      error,
-    )
-  }
+function loadTrophyWindow(tier, start, end) {
+  if (activeSteamId.value !== steamId.value) return Promise.resolve([])
+  return steamStore.loadTrophyWindow(steamId.value, tier, start, end)
 }
 </script>
 
@@ -251,12 +240,11 @@ async function loadVisibleAchievementIcons(appId) {
             </p>
             <TrophyCabinet
               v-if="selectedView === 'display'"
-              :trophies="trophyCollection"
+              :load-trophy-window="loadTrophyWindow"
               :games="games"
               :status="collectionStatus"
               @select-trophy="selectedTrophy = { ...$event, game: gameByAppId.get(String($event.appid)) || null }"
               @select-diamond="selectedTrophy = { isDiamond: true, game: $event, name: $event.name }"
-              @request-achievement-icons="loadVisibleAchievementIcons"
             />
             <GamesCollection
               v-else-if="selectedView === 'games'"

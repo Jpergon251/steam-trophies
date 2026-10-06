@@ -52,53 +52,71 @@ and is not used by FastAPI routes.
 
 ## Current profile request flow
 
-The Vue store loads the profile and owned-games list first, displays that
-library, then requests unlocked-achievement summaries in pages. The backend
-reuses the owned-games cache and requests `GetTopAchievementsForGames` in
-configurable batches. The summary route accepts an optional `batch_index` and
-returns that batch with `batch_count`; omitting it preserves the full-response
-behavior for compatible callers. The frontend fetches one page at a time with
-at most three requests in parallel and persists each page before proceeding.
-Full achievement catalogs are fetched from the retained legacy route only when
-a game detail page is opened (or an individual Top result is missing,
-malformed, or reaches the configured result cap). Grid/list changes use the
-same local store and do not call the backend. The backend routes are:
+The Vue store loads the profile and owned-games list first. Games remain
+lightweight library records; summary counts are stored separately and update
+progressively. The backend reuses its owned-games cache and requests
+`GetTopAchievementsForGames` in configurable AppID batches. The summary route
+defaults to page zero and always returns one batch with `batch_index`,
+`batch_count`, and `batch_size`; callers request later pages explicitly. The
+frontend fetches pages sequentially, persists each page before requesting the
+next, and continues after page-level failures.
+
+The summary response contains one small aggregate per game plus columnar,
+unlocked trophy-card fields grouped by AppID and tier. It does not return
+locked-catalog entries, API names, unlock timestamps, or achievement objects.
+Steam's raw Top response is reduced to those columns before it is cached or
+returned from FastAPI. The browser stores aggregate summaries separately from
+the display columns and asks IndexedDB for only the currently virtualized card
+window; Pinia never holds the complete trophy-card collection. Full achievement
+catalogs are fetched from the retained legacy route only when a game detail is
+opened, except for the bounded per-batch repair of missing or truncated Top
+results. Grid/list changes use the same library summaries and make no
+achievement requests. The backend routes are:
 
 - `GET /api/steam/search?q=...`
 - `GET /api/steam/profile?steam_id=...`
 - `GET /api/steam/profile/{steam_id}/games`
-- `GET /api/steam/profile/{steam_id}/achievements`
+- `GET /api/steam/profile/{steam_id}/achievements` (first page)
 - `GET /api/steam/profile/{steam_id}/achievements?batch_index=0`
 - `GET /api/steam/profile/{steam_id}/games/{app_id}/achievements`
 
 Before this optimization, a cold profile with `N` games could make up to
 **2 + 2N** Steam API requests: player summary, owned games, then individual
 player-achievement and global-percentage requests. The initial summary path
-now makes **2 + ceil(N / TOP_ACHIEVEMENTS_BATCH_SIZE)** Steam requests at most
-(player summary, owned games, and batched Top results). With the default batch
-size of 164, a 164-game profile uses three Steam requests total before any
-detail page is opened. A detail page retains the legacy fallback and may make
+now makes **2 + ceil(N / TOP_ACHIEVEMENTS_BATCH_SIZE)** Steam requests on the
+summary path (player summary, owned games, and batched Top results), absent
+bounded repairs and retries. With the default batch size of 350, a 350-game
+profile uses three Steam requests before any detail page is opened. A detail page retains the legacy fallback and may make
 one player-achievement request, one cached game-schema request for achievement
 names/icons, plus a shared/cached global-percentage request.
 
 The summary endpoint reuses the same owned-games cache as the library route.
-Identical Top batches share cached responses and in-flight requests. An active
-game can pass `force_refresh=true` to bypass its Top response cache when a
-fresh unlock is needed. Paging keeps each request short enough for serverless
-HTTP time limits; large profiles can continue loading across multiple
-requests, and a failed page does not discard pages already cached.
+Identical Top batches share cached, compact responses and in-flight requests.
+An active game can pass `force_refresh=true` to bypass only its own batch's
+Top-response cache when a fresh unlock is needed. Paging keeps each request
+short enough for serverless HTTP time limits; a failed page does not discard
+completed pages.
 
 `TOP_ACHIEVEMENTS_MAX` defaults to 1000 and `TOP_ACHIEVEMENTS_BATCH_SIZE`
-defaults to 164, the largest multi-AppID batch verified for this application.
+defaults to 350. The experimental Top endpoint requires GET: a live probe
+accepted 350 AppIDs but returned HTTP 414 for 400 because the encoded request
+URL exceeded the upstream proxy limit; POST returned HTTP 405. Therefore the
+batch size is a practical request-URL limit, not a Steam-documented AppID
+limit, and batches such as 10,000 cannot be sent in a single request.
 The Top method is not part of the published official Web API contract. Results
-contain unlocked entries and aggregate totals, not the full locked catalogue,
-API names, or unlock timestamps. Entries missing from a partly valid response
-are repaired individually, with a limit of ten fallbacks per batch; an empty or
-failed multi-game batch is reported instead of triggering a mass legacy
-fallback. A result list reaching `TOP_ACHIEVEMENTS_MAX` is treated as possibly
-truncated and falls back for that game. All Steam responses reuse the existing
-in-memory cache and in-flight request coalescing. The on-demand detail route
-joins `GetPlayerAchievements` with `GetSchemaForGame` so each achievement can
+contain unlocked display fields and aggregate totals, not the full locked
+catalogue, API names, or unlock timestamps. Entries missing from a partly valid
+response are repaired individually, with a limit of ten fallbacks per batch;
+an empty or failed multi-game batch is reported instead of triggering a mass
+legacy fallback. A result list reaching `TOP_ACHIEVEMENTS_MAX` is treated as
+possibly truncated and falls back for that game. If a 350-AppID page exceeds
+the upstream URL limit and returns HTTP 414, the backend retries it as smaller
+sequential Steam requests while preserving the same logical frontend page.
+Full game details are stored
+in IndexedDB only after the user opens the game; reopening a fresh cached detail
+uses zero Steam requests. All Steam requests reuse the existing in-memory
+single-flight cache. The on-demand detail route joins `GetPlayerAchievements`
+with `GetSchemaForGame` so each achievement can
 include its Steam icon; the profile summary path does not request game schemas.
 
 ## Resource controls

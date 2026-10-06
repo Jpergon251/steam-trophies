@@ -10,6 +10,7 @@ from app.cache import AsyncTTLCache
 from app.config import settings
 from app.services.steam import (
     SteamConcurrencyLimiter,
+    _compact_top_achievement_response,
     get_achievement_summaries,
     get_player_achievements,
     steam_request,
@@ -143,24 +144,56 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
 
         summary = result["games"][0]
         self.assertEqual(summary["appid"], 10)
-        self.assertEqual(summary["game"]["name"], "Example")
         self.assertEqual(summary["achievement_count"], 4)
         self.assertEqual(summary["unlocked_count"], 1)
-        self.assertFalse(summary["details_complete"])
-        self.assertEqual(summary["achievements"][0]["global_percent"], 8.5)
+        self.assertEqual(summary["tier_counts"], {"bronze": 0, "silver": 0, "gold": 1})
+        trophy_group = result["trophies"][0]
+        self.assertEqual(trophy_group["tier"], "gold")
+        trophy_columns = trophy_group["columns"]
+        self.assertEqual(trophy_columns["percentages"], [8.5])
         self.assertEqual(
-            summary["achievements"][0]["icon"],
+            trophy_columns["icons"][0],
             "https://media.steampowered.com/steamcommunity/public/images/apps/10/0123456789abcdef.jpg",
         )
         self.assertEqual(
-            summary["achievements"][0]["icongray"],
+            trophy_columns["gray_icons"][0],
             "https://cdn.example.test/gray.png",
         )
-        self.assertNotIn("apiname", summary["achievements"][0])
+        self.assertNotIn("achievements", summary)
+        self.assertNotIn("apiname", trophy_columns)
         self.assertEqual(result["errors"], {})
         self.assertEqual(request.await_count, 2)
         self.assertEqual(request.await_args_list[1].args[0], "IPlayerService/GetTopAchievementsForGames/v1/")
         self.assertEqual(request.await_args_list[1].args[1]["max_achievements"], 1000)
+
+    async def test_top_response_compacts_achievement_objects_to_tier_columns(self):
+        compact = _compact_top_achievement_response({
+            "response": {
+                "games": [{
+                    "appid": 10,
+                    "total_achievements": 2,
+                    "achievements": [
+                        {
+                            "name": "Rare",
+                            "desc": "Description",
+                            "icon": "icon",
+                            "icon_gray": "gray",
+                            "player_percent_unlocked": 10,
+                        },
+                        {
+                            "name": "Common",
+                            "player_percent_unlocked": 70,
+                        },
+                    ],
+                }],
+            },
+        })
+
+        game = compact["response"]["games"][0]
+        self.assertNotIn("achievements", game)
+        self.assertEqual(game["achievement_columns"]["gold"]["names"], ["Rare"])
+        self.assertEqual(game["achievement_columns"]["bronze"]["names"], ["Common"])
+        self.assertEqual(game["achievement_columns"]["silver"]["names"], [])
 
     async def test_zero_partial_and_complete_progress_keep_exact_counts(self):
         owned = {
@@ -230,7 +263,7 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
             result = await get_achievement_summaries(self.steam_id)
 
         self.assertEqual([item["appid"] for item in result["games"]], [10, 20])
-        self.assertEqual(result["games"][1]["source"], "legacy_fallback")
+        self.assertEqual(result["games"][1]["unlocked_count"], 1)
         fallback.assert_awaited_once_with(self.steam_id, 20)
         self.assertEqual(result["errors"], {})
 
@@ -268,7 +301,7 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = await get_achievement_summaries(self.steam_id)
 
-        self.assertEqual(result["games"][0]["source"], "legacy_fallback")
+        self.assertEqual(result["games"][0]["unlocked_count"], 1)
         fallback.assert_awaited_once_with(self.steam_id, 10)
 
     async def test_unexpected_single_game_response_uses_legacy_fallback(self):
@@ -295,7 +328,6 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = await get_achievement_summaries(self.steam_id)
 
-        self.assertEqual(result["games"][0]["source"], "legacy_fallback")
         self.assertFalse(result["games"][0]["available"])
         fallback.assert_awaited_once_with(self.steam_id, 10)
 
@@ -443,6 +475,175 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
             [int(value) for key, value in top_calls[0].args[1].items() if key.startswith("appids[")],
             [3, 4],
         )
+
+    async def test_large_profiles_are_served_in_compact_pages(self):
+        profile_sizes = {
+            100: 1_000,
+            1_000: 10_000,
+            5_000: 100_000,
+            13_000: 700_000,
+        }
+
+        for game_count, achievement_total in profile_sizes.items():
+            with self.subTest(game_count=game_count):
+                base_count, remainder = divmod(achievement_total, game_count)
+                owned_games = [
+                    {
+                        "appid": app_id,
+                        "name": f"Game {app_id}",
+                        "total_achievements": base_count + int(app_id <= remainder),
+                    }
+                    for app_id in range(1, game_count + 1)
+                ]
+                games_by_id = {game["appid"]: game for game in owned_games}
+
+                async def respond(endpoint, params, **kwargs):
+                    if endpoint.endswith("GetOwnedGames/v1/"):
+                        return {"response": {"games": owned_games}}
+                    app_ids = [
+                        int(value)
+                        for key, value in params.items()
+                        if key.startswith("appids[")
+                    ]
+                    return {
+                        "response": {
+                            "games": [
+                                {
+                                    "appid": app_id,
+                                    "total_achievements": games_by_id[app_id]["total_achievements"],
+                                    "achievements": [],
+                                }
+                                for app_id in app_ids
+                            ],
+                        },
+                    }
+
+                accumulated_games = 0
+                accumulated_total = 0
+                with (
+                    patch("app.services.steam.steam_request", new=AsyncMock(side_effect=respond)),
+                    patch.object(settings, "top_achievements_batch_size", 350),
+                ):
+                    batch_count = (game_count + 349) // 350
+                    for batch_index in range(batch_count):
+                        page = await get_achievement_summaries(
+                            self.steam_id,
+                            batch_index=batch_index,
+                        )
+                        self.assertEqual(page["batch_count"], batch_count)
+                        self.assertEqual(page["batch_index"], batch_index)
+                        self.assertEqual(page["batch_size"], 350)
+                        self.assertLessEqual(len(page["games"]), 350)
+                        self.assertEqual(page["trophies"], [])
+                        self.assertTrue(
+                            all("achievements" not in game for game in page["games"]),
+                        )
+                        accumulated_games += len(page["games"])
+                        accumulated_total += sum(
+                            game["achievement_count"]
+                            for game in page["games"]
+                        )
+
+                self.assertEqual(accumulated_games, game_count)
+                self.assertEqual(accumulated_total, achievement_total)
+
+    async def test_configured_batch_size_is_capped_to_verified_get_url_limit(self):
+        owned = {
+            "response": {
+                "games": [{"appid": app_id, "name": str(app_id)} for app_id in range(1, 501)],
+            },
+        }
+
+        async def respond(endpoint, params, **kwargs):
+            if endpoint.endswith("GetOwnedGames/v1/"):
+                return owned
+            app_ids = [
+                int(value)
+                for key, value in params.items()
+                if key.startswith("appids[")
+            ]
+            return {
+                "response": {
+                    "games": [{
+                        "appid": app_id,
+                        "total_achievements": 0,
+                        "achievements": [],
+                    } for app_id in app_ids],
+                },
+            }
+
+        with (
+            patch("app.services.steam.steam_request", new=AsyncMock(side_effect=respond)) as request,
+            patch.object(settings, "top_achievements_batch_size", 1_000),
+        ):
+            page = await get_achievement_summaries(self.steam_id, batch_index=0)
+
+        top_call = next(
+            call for call in request.await_args_list
+            if "GetTopAchievementsForGames" in call.args[0]
+        )
+        self.assertEqual(page["batch_size"], 350)
+        self.assertEqual(page["batch_count"], 2)
+        self.assertEqual(
+            len([key for key in top_call.args[1] if key.startswith("appids[")]),
+            350,
+        )
+
+    async def test_414_top_request_splits_chunk_without_changing_page_size(self):
+        owned = {
+            "response": {
+                "games": [{"appid": app_id, "name": str(app_id)} for app_id in range(101, 105)],
+            },
+        }
+        top_chunk_sizes = []
+
+        async def respond(endpoint, params, **kwargs):
+            if endpoint.endswith("GetOwnedGames/v1/"):
+                return owned
+            app_ids = [
+                int(value)
+                for key, value in params.items()
+                if key.startswith("appids[")
+            ]
+            top_chunk_sizes.append(len(app_ids))
+            if len(app_ids) > 2:
+                request = httpx.Request(
+                    "GET",
+                    "https://api.steampowered.com/test",
+                )
+                response = httpx.Response(414, request=request)
+                raise httpx.HTTPStatusError(
+                    "URI Too Long",
+                    request=request,
+                    response=response,
+                )
+            return {
+                "response": {
+                    "games": [
+                        {
+                            "appid": app_id,
+                            "total_achievements": 0,
+                            "achievements": [],
+                        }
+                        for app_id in app_ids
+                    ],
+                },
+            }
+
+        with (
+            patch("app.services.steam.steam_request", new=AsyncMock(side_effect=respond)),
+            patch.object(settings, "top_achievements_batch_size", 4),
+        ):
+            result = await get_achievement_summaries(
+                self.steam_id,
+                batch_index=0,
+            )
+
+        self.assertEqual(top_chunk_sizes, [4, 2, 2])
+        self.assertEqual(result["batch_size"], 4)
+        self.assertEqual(result["batch_count"], 1)
+        self.assertEqual([game["appid"] for game in result["games"]], [101, 102, 103, 104])
+        self.assertEqual(result["errors"], {})
 
     async def test_requested_batch_out_of_range_is_rejected(self):
         owned = {"response": {"games": [{"appid": 10, "name": "Example"}]}}

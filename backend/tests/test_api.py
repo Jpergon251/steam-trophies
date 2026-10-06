@@ -91,16 +91,18 @@ class ApiCompatibilityTests(unittest.IsolatedAsyncioTestCase):
         mocked.assert_awaited_once_with(
             STEAM_ID,
             force_refresh=True,
-            batch_index=None,
+            batch_index=0,
         )
 
     async def test_summary_route_accepts_batch_index(self):
         summary = {
             "steamid": STEAM_ID,
             "games": [{"appid": 10}],
+            "trophies": [],
             "errors": {},
             "batch_index": 2,
             "batch_count": 4,
+            "batch_size": 350,
         }
         with patch(
             "app.main.get_achievement_summaries",
@@ -118,6 +120,33 @@ class ApiCompatibilityTests(unittest.IsolatedAsyncioTestCase):
             STEAM_ID,
             force_refresh=False,
             batch_index=2,
+        )
+
+    async def test_summary_route_without_index_defaults_to_one_page(self):
+        summary = {
+            "steamid": STEAM_ID,
+            "games": [],
+            "trophies": [],
+            "errors": {},
+            "batch_index": 0,
+            "batch_count": 1,
+            "batch_size": 350,
+        }
+        with patch(
+            "app.main.get_achievement_summaries",
+            new=AsyncMock(return_value=summary),
+        ) as mocked:
+            response = await request_app(
+                f"/api/steam/profile/{STEAM_ID}/achievements",
+                client_port=5214,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), summary)
+        mocked.assert_awaited_once_with(
+            STEAM_ID,
+            force_refresh=False,
+            batch_index=0,
         )
 
     async def test_summary_upstream_error_is_cors_enabled_and_logged(self):

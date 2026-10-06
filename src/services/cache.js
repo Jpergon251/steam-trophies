@@ -7,19 +7,22 @@
 // Logical keys:
 //   profiles     -> steamId
 //   games        -> [steamId, appid]   (index: bySteamId)
-//   achievements -> [steamId, appid]   (index: bySteamId)
+//   achievement_summaries -> [steamId, appid] (index: bySteamId)
+//   achievements -> [steamId, appid] (full details only)
+//   trophies     -> [steamId, tier, appid] (columnar display data)
 //
 // Bump DB_VERSION whenever the schema changes and add the matching migration
 // branch inside `onupgradeneeded`; never open a brand new database per schema.
 
 const DATABASE_NAME = "steam-trophies-cache";
-// Version 2 was used by the previous cache implementation. Version 3 keeps
-// those stores/records and adds the dedicated achievements store if absent.
-const DB_VERSION = 3;
+// Version 4 separates summaries, detail catalogs, and display trophy data.
+const DB_VERSION = 4;
 
 const PROFILE_STORE = "profiles";
 const GAME_STORE = "games";
 const ACHIEVEMENT_STORE = "achievements";
+const SUMMARY_STORE = "achievement_summaries";
+const TROPHY_STORE = "trophies";
 
 import { getTrophyTier } from '../data/trophyTiers.js';
 
@@ -64,6 +67,18 @@ function openDatabase() {
           gamesStore.createIndex(BY_STEAM_ID, "steamId", { unique: false });
         }
 
+        let summariesStore;
+        if (!db.objectStoreNames.contains(SUMMARY_STORE)) {
+          summariesStore = db.createObjectStore(SUMMARY_STORE, {
+            keyPath: GAME_KEY,
+          });
+        } else {
+          summariesStore = request.transaction.objectStore(SUMMARY_STORE);
+        }
+        if (!summariesStore.indexNames.contains(BY_STEAM_ID)) {
+          summariesStore.createIndex(BY_STEAM_ID, "steamId", { unique: false });
+        }
+
         // Migration to v3: the v2 schema already had profiles and games;
         // preserve those records and add the achievements store. On a v1
         // install this also creates the store during the same upgrade.
@@ -80,26 +95,51 @@ function openDatabase() {
             unique: false,
           });
         }
+        if (!db.objectStoreNames.contains(TROPHY_STORE)) {
+          const trophiesStore = db.createObjectStore(TROPHY_STORE, {
+            keyPath: ["steamId", "tier", "appid"],
+          });
+          trophiesStore.createIndex(BY_STEAM_ID, "steamId", { unique: false });
+        }
 
-        // The prior v2 cache stored achievement payloads alongside each game.
-        // Copy them into the dedicated store during upgrade, without deleting
-        // or rewriting the original game/profile records. This makes migration
-        // idempotent and preserves caches already on disk.
+        // Move legacy full catalogs out of game records. Aggregate summaries
+        // are refreshed into their own store after the new version is opened.
         if (oldVersion > 0 && oldVersion < 3) {
           const cursorRequest = gamesStore.openCursor();
           cursorRequest.onsuccess = () => {
             const cursor = cursorRequest.result;
             if (!cursor) return;
             const game = cursor.value;
-            if (Array.isArray(game.achievements) && game.achievements.length) {
+            if (
+              Array.isArray(game.achievements) &&
+              game.achievements.length &&
+              game.achievementsDetailsComplete !== false
+            ) {
               achievementsStore.put({
                 steamId: String(game.steamId),
                 appid: String(game.appid),
                 achievements: game.achievements,
                 available: game.achievementsAvailable !== false,
+                detailsComplete: true,
+                iconsComplete: game.achievementsIconsComplete === true,
                 cachedAt: game.achievementsUpdatedAt || game.cachedAt || Date.now(),
               });
             }
+            if (Array.isArray(game.achievements) && game.achievements.length) {
+              game.achievements = [];
+              game.achievementsDetailsComplete = false;
+              cursor.update(game);
+            }
+            cursor.continue();
+          };
+        }
+
+        if (oldVersion >= 3 && oldVersion < 4) {
+          const cursorRequest = achievementsStore.openCursor();
+          cursorRequest.onsuccess = () => {
+            const cursor = cursorRequest.result;
+            if (!cursor) return;
+            if (cursor.value.detailsComplete !== true) cursor.delete();
             cursor.continue();
           };
         }
@@ -245,6 +285,8 @@ export function serializeGame(game) {
     headerUrl: String(game.headerUrl || ''),
     fallbackUrl: String(game.fallbackUrl || ''),
     achievements,
+    libraryOrder: Math.max(0, Number(game.libraryOrder) || 0),
+    achievementSummaryVersion: Number(game.achievementSummaryVersion) || 0,
     achievementsDetailsComplete: Boolean(detailsComplete),
     achievementsIconsComplete: Boolean(game.achievementsIconsComplete),
     achievementsAvailable: game.achievementsAvailable ?? null,
@@ -263,6 +305,40 @@ export function serializeGame(game) {
     achievementsUpdatedAt: Number(game.achievementsUpdatedAt) || 0,
     achievementsPlaytime: Number(game.achievementsPlaytime ?? playtimeForever) || 0,
     has_community_visible_stats: Boolean(game.has_community_visible_stats),
+  };
+}
+
+function serializeOwnedGame(game) {
+  return {
+    appid: String(game.appid),
+    name: String(game.name || ''),
+    playtime_forever: Number(game.playtime_forever) || 0,
+    playtime_2weeks: Number(game.playtime_2weeks) || 0,
+    rtime_last_played: Number(game.rtime_last_played) || 0,
+    img_icon_url: String(game.img_icon_url || ''),
+    img_logo_url: String(game.img_logo_url || ''),
+    coverUrl: String(game.coverUrl || ''),
+    headerUrl: String(game.headerUrl || ''),
+    fallbackUrl: String(game.fallbackUrl || ''),
+    has_community_visible_stats: Boolean(game.has_community_visible_stats),
+    libraryOrder: Math.max(0, Number(game.libraryOrder) || 0),
+  };
+}
+
+function serializeAchievementSummary(game, cleanGame = serializeGame(game)) {
+  if (!cleanGame) return null;
+  return {
+    steamId: String(game.steamId || ''),
+    appid: toAppId(cleanGame.appid),
+    total: cleanGame.achievementCount,
+    unlocked: cleanGame.unlockedCount,
+    percentage: cleanGame.progress,
+    tierCounts: cleanGame.tierCounts,
+    isDiamond: cleanGame.isDiamond,
+    available: cleanGame.achievementsAvailable,
+    updatedAt: cleanGame.achievementsUpdatedAt,
+    playtime: cleanGame.achievementsPlaytime,
+    version: cleanGame.achievementSummaryVersion,
   };
 }
 
@@ -298,7 +374,7 @@ export async function readProfileSnapshot(steamId) {
   const id = normalizeId(steamId);
   const db = await openDatabase();
   const tx = db.transaction(
-    [PROFILE_STORE, GAME_STORE, ACHIEVEMENT_STORE],
+    [PROFILE_STORE, GAME_STORE, SUMMARY_STORE],
     "readonly",
   );
   const done = transactionDone(tx);
@@ -307,69 +383,47 @@ export async function readProfileSnapshot(steamId) {
   const gamesRequest = requestResult(
     tx.objectStore(GAME_STORE).index(BY_STEAM_ID).getAll(id),
   );
-  const achievementsRequest = requestResult(
-    tx.objectStore(ACHIEVEMENT_STORE).index(BY_STEAM_ID).getAll(id),
+  const summariesRequest = requestResult(
+    tx.objectStore(SUMMARY_STORE).index(BY_STEAM_ID).getAll(id),
   );
-
-  const [profileRecord, gameRecords, achievementRecords] = await Promise.all([
+  const [profileRecord, gameRecords, summaryRecords] = await Promise.all([
     profileRequest,
     gamesRequest,
-    achievementsRequest,
+    summariesRequest,
   ]);
   await done;
 
   if (!profileRecord && !gameRecords.length) return null;
 
-  const achievementsByAppId = {};
-  for (const record of achievementRecords) {
-    const rawList = Array.isArray(record.achievements) ? record.achievements : [];
-    achievementsByAppId[toAppId(record.appid)] = {
-      achievements: rawList.map(serializeAchievement).filter(Boolean),
-      available: record.available !== false,
-      cachedAt: Number(record.cachedAt) || 0,
-      detailsComplete: record.detailsComplete ?? true,
-      iconsComplete: record.iconsComplete ?? false,
-    };
-  }
-
-  // Compatibility fallback for v2 data (and partially completed migrations):
-  // achievements were also embedded in each game record. Prefer the dedicated
-  // store when present, but never hide existing legacy data.
-  for (const game of gameRecords) {
-    const appid = toAppId(game.appid);
-    if (!achievementsByAppId[appid] && Array.isArray(game.achievements) && game.achievements.length) {
-      achievementsByAppId[appid] = {
-        achievements: game.achievements.map(serializeAchievement).filter(Boolean),
-        available: game.achievementsAvailable !== false,
-        cachedAt: Number(game.achievementsUpdatedAt || game.cachedAt) || 0,
-        detailsComplete: game.achievementsDetailsComplete ?? true,
-        iconsComplete: game.achievementsIconsComplete ?? false,
-      };
-    }
-  }
-
-  const games = gameRecords.map(({ steamId: _steamId, ...game }) => {
-    const appid = toAppId(game.appid);
-    const ach = achievementsByAppId[appid];
-    const achievements = ach?.achievements?.length ? ach.achievements : (Array.isArray(game.achievements) ? game.achievements : []);
-    const available = ach ? ach.available : (game.achievementsAvailable ?? null);
-    const updatedAt = ach?.cachedAt || game.achievementsUpdatedAt || 0;
-    return serializeGame({
-      ...game,
-      achievements,
-      achievementsAvailable: available,
-      achievementsUpdatedAt: updatedAt,
-      achievementsDetailsComplete: ach?.detailsComplete ?? game.achievementsDetailsComplete,
-      achievementsIconsComplete: ach?.iconsComplete ?? game.achievementsIconsComplete,
-    });
-  }).filter(Boolean);
+  const summariesByAppId = new Map(
+    summaryRecords.map((record) => [toAppId(record.appid), record]),
+  );
+  const games = gameRecords
+    .sort((left, right) => (Number(left.libraryOrder) || 0) - (Number(right.libraryOrder) || 0))
+    .map(({ steamId: _steamId, ...game }) => {
+      const summary = summariesByAppId.get(toAppId(game.appid));
+      return serializeGame({
+        ...game,
+        achievementCount: summary?.total ?? game.achievementCount,
+        unlockedCount: summary?.unlocked ?? game.unlockedCount,
+        progress: summary?.percentage ?? game.progress,
+        tierCounts: summary?.tierCounts ?? game.tierCounts,
+        isDiamond: summary?.isDiamond ?? game.isDiamond,
+        achievementsAvailable: summary?.available ?? game.achievementsAvailable,
+        achievementsUpdatedAt: summary?.updatedAt ?? game.achievementsUpdatedAt,
+        achievementsPlaytime: summary?.playtime ?? game.achievementsPlaytime,
+        achievementSummaryVersion: summary?.version ?? game.achievementSummaryVersion,
+        achievements: [],
+        achievementsDetailsComplete: false,
+      })
+    })
+    .filter(Boolean);
 
   return {
     profile: profileRecord?.profile ? serializeProfile(profileRecord.profile) : null,
     profileCachedAt: Number(profileRecord?.cachedAt) || 0,
     games,
     gamesCachedAt: Number(profileRecord?.gamesCachedAt) || 0,
-    achievementsByAppId,
   };
 }
 
@@ -387,14 +441,16 @@ export async function writeGamesSnapshot(
   const id = normalizeId(steamId);
   const db = await openDatabase();
   const tx = db.transaction(
-    [PROFILE_STORE, GAME_STORE, ACHIEVEMENT_STORE],
+    [PROFILE_STORE, GAME_STORE, SUMMARY_STORE, ACHIEVEMENT_STORE, TROPHY_STORE],
     "readwrite",
   );
   const done = transactionDone(tx);
 
   const profileStore = tx.objectStore(PROFILE_STORE);
   const gameStore = tx.objectStore(GAME_STORE);
+  const summaryStore = tx.objectStore(SUMMARY_STORE);
   const achievementStore = tx.objectStore(ACHIEVEMENT_STORE);
+  const trophyStore = tx.objectStore(TROPHY_STORE);
   const gameIndex = gameStore.index(BY_STEAM_ID);
   const achievementIndex = achievementStore.index(BY_STEAM_ID);
 
@@ -402,25 +458,50 @@ export async function writeGamesSnapshot(
   const existingKeysRequest = removeMissing
     ? requestResult(gameIndex.getAllKeys(id))
     : null;
+  const summaryIndex = summaryStore.index(BY_STEAM_ID);
+  const existingSummaryKeysRequest = removeMissing
+    ? requestResult(summaryIndex.getAllKeys(id))
+    : null;
   const existingAchievementKeysRequest = removeMissing
     ? requestResult(achievementIndex.getAllKeys(id))
+    : null;
+  const existingTrophyKeysRequest = removeMissing
+    ? requestResult(trophyStore.index(BY_STEAM_ID).getAllKeys(id))
     : null;
 
   const existingProfile = await existingProfileRequest;
   const existingKeys = existingKeysRequest ? await existingKeysRequest : null;
+  const existingSummaryKeys = existingSummaryKeysRequest
+    ? await existingSummaryKeysRequest
+    : null;
   const existingAchievementKeys = existingAchievementKeysRequest
     ? await existingAchievementKeysRequest
     : null;
+  const existingTrophyKeys = existingTrophyKeysRequest
+    ? await existingTrophyKeysRequest
+    : null;
 
-  if (removeMissing && existingKeys && existingAchievementKeys) {
+  if (
+    removeMissing &&
+    existingKeys &&
+    existingSummaryKeys &&
+    existingAchievementKeys &&
+    existingTrophyKeys
+  ) {
     const incomingIds = new Set((games || []).map((game) => toAppId(game.appid)));
     for (const key of existingKeys) {
       if (!incomingIds.has(toAppId(key[1]))) gameStore.delete(key);
+    }
+    for (const key of existingSummaryKeys) {
+      if (!incomingIds.has(toAppId(key[1]))) summaryStore.delete(key);
     }
     // Achievements are keyed independently, so remove both records for games
     // no longer present in the confirmed full Steam collection snapshot.
     for (const key of existingAchievementKeys) {
       if (!incomingIds.has(toAppId(key[1]))) achievementStore.delete(key);
+    }
+    for (const key of existingTrophyKeys) {
+      if (!incomingIds.has(toAppId(key[2]))) trophyStore.delete(key);
     }
   }
 
@@ -428,24 +509,15 @@ export async function writeGamesSnapshot(
     try {
       const cleanGame = serializeGame(game);
       if (cleanGame) {
-        const achievements = cleanGame.achievements;
-        cleanGame.achievements = [];
-        gameStore.put({ ...cleanGame, steamId: id, appid: toAppId(cleanGame.appid) });
-        if (
-          achievements.length > 0 ||
-          cleanGame.achievementsAvailable !== null ||
-          cleanGame.achievementsUpdatedAt
-        ) {
-          achievementStore.put({
-            steamId: id,
-            appid: toAppId(cleanGame.appid),
-            achievements,
-            available: cleanGame.achievementsAvailable !== false,
-            detailsComplete: cleanGame.achievementsDetailsComplete,
-            iconsComplete: cleanGame.achievementsIconsComplete,
-            cachedAt: cleanGame.achievementsUpdatedAt || Date.now(),
-          });
-        }
+        gameStore.put({
+          ...serializeOwnedGame(cleanGame),
+          steamId: id,
+          appid: toAppId(cleanGame.appid),
+        });
+        summaryStore.put({
+          ...serializeAchievementSummary(game, cleanGame),
+          steamId: id,
+        });
       }
     } catch (putError) {
       console.error(`Failed to persist game ${game?.appid} to IndexedDB:`, putError);
@@ -470,15 +542,52 @@ export async function writeGame(steamId, game) {
   const cleanGame = serializeGame(game);
   if (!cleanGame) return;
   const db = await openDatabase();
-  const tx = db.transaction(GAME_STORE, "readwrite");
+  const tx = db.transaction([GAME_STORE, SUMMARY_STORE], "readwrite");
   const done = transactionDone(tx);
-  cleanGame.achievements = [];
   tx.objectStore(GAME_STORE).put({
-    ...cleanGame,
+    ...serializeOwnedGame(cleanGame),
     steamId: id,
     appid: toAppId(cleanGame.appid),
   });
+  tx.objectStore(SUMMARY_STORE).put({
+    ...serializeAchievementSummary(game, cleanGame),
+    steamId: id,
+  });
   await done;
+}
+
+export async function readGameAchievementDetails(steamId, appid) {
+  const id = normalizeId(steamId);
+  const db = await openDatabase();
+  const tx = db.transaction(ACHIEVEMENT_STORE, "readonly");
+  const done = transactionDone(tx);
+  const record = await requestResult(
+    tx.objectStore(ACHIEVEMENT_STORE).get([id, toAppId(appid)]),
+  );
+  await done;
+  if (!record?.detailsComplete) return null;
+  return {
+    achievements: Array.isArray(record.achievements) ? record.achievements : [],
+    available: record.available !== false,
+    cachedAt: Number(record.cachedAt) || 0,
+    detailsComplete: true,
+    iconsComplete: record.iconsComplete === true,
+  };
+}
+
+export async function readTrophyGroups(steamId, tier, appids) {
+  if (!appids.length) return [];
+  const id = normalizeId(steamId);
+  const db = await openDatabase();
+  const tx = db.transaction(TROPHY_STORE, "readonly");
+  const done = transactionDone(tx);
+  const store = tx.objectStore(TROPHY_STORE);
+  const requests = appids.map((appid) =>
+    requestResult(store.get([id, tier, toAppId(appid)])),
+  );
+  const records = await Promise.all(requests);
+  await done;
+  return records;
 }
 
 /** Persists the achievements payload for a single game. */
@@ -513,34 +622,36 @@ export async function writeAchievements(
 }
 
 /** Persists one fetched Steam summary page in a single IndexedDB transaction. */
-export async function writeAchievementBatch(steamId, games) {
+export async function writeAchievementBatch(steamId, games, trophyGroupsByAppId) {
   const id = normalizeId(steamId);
   const db = await openDatabase();
-  const tx = db.transaction([GAME_STORE, ACHIEVEMENT_STORE], "readwrite");
+  const tx = db.transaction([SUMMARY_STORE, TROPHY_STORE], "readwrite");
   const done = transactionDone(tx);
-  const gameStore = tx.objectStore(GAME_STORE);
-  const achievementStore = tx.objectStore(ACHIEVEMENT_STORE);
+  const summaryStore = tx.objectStore(SUMMARY_STORE);
+  const trophyStore = tx.objectStore(TROPHY_STORE);
 
   for (const game of games) {
     const cleanGame = serializeGame(game);
     if (!cleanGame) continue;
     const appid = toAppId(cleanGame.appid);
-    const achievements = cleanGame.achievements.map(serializeAchievement).filter(Boolean);
-    cleanGame.achievements = [];
-    gameStore.put({
-      ...cleanGame,
+    summaryStore.put({
+      ...serializeAchievementSummary(game, cleanGame),
       steamId: id,
       appid,
     });
-    achievementStore.put({
-      steamId: id,
-      appid,
-      achievements,
-      available: cleanGame.achievementsAvailable !== false,
-      detailsComplete: cleanGame.achievementsDetailsComplete,
-      iconsComplete: cleanGame.achievementsIconsComplete,
-      cachedAt: cleanGame.achievementsUpdatedAt || Date.now(),
-    });
+    for (const tier of ["bronze", "silver", "gold"]) {
+      trophyStore.delete([id, tier, appid]);
+      const trophies = trophyGroupsByAppId.get(appid)?.[tier] || [];
+      if (trophies.names?.length) {
+        trophyStore.put({
+          steamId: id,
+          tier,
+          appid,
+          count: trophies.names.length,
+          trophies,
+        });
+      }
+    }
   }
 
   await done;
@@ -571,9 +682,17 @@ export async function writeProfile(steamId, profile) {
 export async function deleteGame(steamId, appid) {
   const id = normalizeId(steamId);
   const db = await openDatabase();
-  const tx = db.transaction([GAME_STORE, ACHIEVEMENT_STORE], "readwrite");
+  const tx = db.transaction(
+    [GAME_STORE, ACHIEVEMENT_STORE, TROPHY_STORE],
+    "readwrite",
+  );
   const done = transactionDone(tx);
   tx.objectStore(GAME_STORE).delete([id, toAppId(appid)]);
   tx.objectStore(ACHIEVEMENT_STORE).delete([id, toAppId(appid)]);
+  const trophyIndex = tx.objectStore(TROPHY_STORE).index(BY_STEAM_ID);
+  const keys = await requestResult(trophyIndex.getAllKeys(id));
+  for (const key of keys) {
+    if (toAppId(key[2]) === toAppId(appid)) tx.objectStore(TROPHY_STORE).delete(key);
+  }
   await done;
 }

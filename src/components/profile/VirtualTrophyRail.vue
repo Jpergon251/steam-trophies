@@ -11,7 +11,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['select', 'request-achievement-icons'])
-const visibleTrophies = computed(() => props.trophies.slice(props.start, props.end))
+const visibleTrophies = computed(() => props.trophies)
 </script>
 
 <template>

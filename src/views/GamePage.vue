@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ArrowLeft, Check, Diamond, LockKeyhole, Search, Trophy } from '@lucide/vue'
 import { getTrophyTier } from '../data/trophyTiers.js'
 import { RouterLink, useRoute } from 'vue-router'
@@ -134,6 +134,10 @@ watch([steamId, appid], async ([id, gameId]) => {
     detailsPending.value = false
   }
 }, { immediate: true })
+
+onBeforeUnmount(() => {
+  steamStore.evictGameDetails(steamId.value)
+})
 
 watch(appid, () => {
   activeFilter.value = 'all'

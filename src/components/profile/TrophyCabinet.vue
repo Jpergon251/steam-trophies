@@ -1,27 +1,28 @@
 <script setup>
 import { computed } from 'vue'
 import TrophyShelf from './TrophyShelf.vue'
-import { getTrophyTier } from '../../data/trophyTiers.js'
 
 const props = defineProps({
-  trophies: { type: Array, default: () => [] },
   games: { type: Array, default: () => [] },
+  loadTrophyWindow: { type: Function, default: null },
   status: { type: String, default: 'idle' },
 })
 defineEmits(['select-trophy', 'select-diamond', 'request-achievement-icons'])
 
 const tierKeys = ['bronze', 'silver', 'gold']
 
-function trophyTier(trophy) {
-  return getTrophyTier(trophy.global_percent) || trophy.tier
-}
+const diamondGames = computed(() => props.games.filter((game) => game.isDiamond))
+const tierCounts = computed(() => props.games.reduce((counts, game) => {
+  if (game.achievementSummaryVersion !== 1) return counts
+  counts.bronze += Number(game.tierCounts?.bronze) || 0
+  counts.silver += Number(game.tierCounts?.silver) || 0
+  counts.gold += Number(game.tierCounts?.gold) || 0
+  return counts
+}, { bronze: 0, silver: 0, gold: 0 }))
 
-const shelves = computed(() => ({
-  bronze: props.trophies.filter((item) => trophyTier(item) === 'bronze'),
-  silver: props.trophies.filter((item) => trophyTier(item) === 'silver'),
-  gold: props.trophies.filter((item) => trophyTier(item) === 'gold'),
-  diamond: props.games.filter((game) => game.isDiamond),
-}))
+function loadWindow(tier, start, end) {
+  return props.loadTrophyWindow?.(tier, start, end) || Promise.resolve([])
+}
 </script>
 
 <template>
@@ -37,7 +38,8 @@ const shelves = computed(() => ({
       :key="key"
       :tier="key"
       :label="$t(`profile.cabinet.${key}`)"
-      :trophies="shelves[key]"
+      :total-count="tierCounts[key]"
+      :load-window="(start, end) => loadWindow(key, start, end)"
       :loading="status !== 'success'"
       @select="$emit('select-trophy', $event)"
       @request-achievement-icons="$emit('request-achievement-icons', $event)"
@@ -45,7 +47,7 @@ const shelves = computed(() => ({
     <TrophyShelf
       tier="diamond"
       :label="$t('profile.cabinet.diamond')"
-      :trophies="shelves.diamond"
+      :trophies="diamondGames"
       :loading="status !== 'success'"
       diamonds
       @select-diamond="$emit('select-diamond', $event)"

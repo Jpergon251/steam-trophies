@@ -1,10 +1,12 @@
 import asyncio
 import json
 import logging
+import math
 import random
 import re
 import time
 from contextlib import asynccontextmanager
+from typing import Any, Callable
 from urllib.parse import quote, urlparse
 from urllib.parse import urlparse
 
@@ -18,6 +20,7 @@ logger = logging.getLogger(__name__)
 STEAM_API_BASE = "https://api.steampowered.com"
 STEAM_ID64_PATTERN = re.compile(r"^\d{17}$")
 MAX_LEGACY_FALLBACKS_PER_BATCH = 10
+MAX_TOP_ACHIEVEMENTS_BATCH_SIZE = 350
 _http_client: httpx.AsyncClient | None = None
 
 
@@ -78,13 +81,21 @@ def _cache_ttl(endpoint: str) -> int:
     return settings.cache_negative_ttl
 
 
-async def steam_request(endpoint: str, params: dict, *, force_refresh: bool = False):
+async def steam_request(
+    endpoint: str,
+    params: dict,
+    *,
+    force_refresh: bool = False,
+    response_transform: Callable[[Any], Any] | None = None,
+):
     if not settings.steam_api_key:
         raise RuntimeError("STEAM_API_KEY is not configured")
     if _http_client is None or _steam_semaphore is None:
         raise RuntimeError("Steam HTTP client is not initialized.")
 
     cache_key = f"steam:{endpoint}:{json.dumps(params, sort_keys=True, separators=(',', ':'))}"
+    if response_transform is not None:
+        cache_key = f"{cache_key}:transformed-v1"
 
     async def load_response():
         request_metrics = current_request_metrics.get()
@@ -111,7 +122,8 @@ async def steam_request(endpoint: str, params: dict, *, force_refresh: bool = Fa
                                 time.perf_counter() - request_started
                             ) * 1000
                     response.raise_for_status()
-                    return response.json()
+                    data = response.json()
+                    return response_transform(data) if response_transform else data
             except httpx.HTTPStatusError as error:
                 if metrics is not None:
                     metrics.upstream_status = error.response.status_code
@@ -179,6 +191,54 @@ async def get_owned_games(steam_id: str):
     )
 
 
+async def _request_top_achievement_chunk(
+    steam_id: str,
+    app_ids: list[int],
+    *,
+    force_refresh: bool,
+):
+    params = {
+        "steamid": steam_id,
+        "language": "english",
+        "max_achievements": settings.top_achievements_max,
+        **{f"appids[{index}]": app_id for index, app_id in enumerate(app_ids)},
+    }
+    try:
+        return await steam_request(
+            "IPlayerService/GetTopAchievementsForGames/v1/",
+            params,
+            force_refresh=force_refresh,
+            response_transform=_compact_top_achievement_response,
+        )
+    except httpx.HTTPStatusError as error:
+        if error.response.status_code != 414 or len(app_ids) <= 1:
+            raise
+
+        midpoint = len(app_ids) // 2
+        logger.warning(
+            "Steam rejected Top achievements URL with 414; splitting AppID chunk "
+            "from %s to %s and %s IDs.",
+            len(app_ids),
+            midpoint,
+            len(app_ids) - midpoint,
+        )
+        first = await _request_top_achievement_chunk(
+            steam_id,
+            app_ids[:midpoint],
+            force_refresh=force_refresh,
+        )
+        second = await _request_top_achievement_chunk(
+            steam_id,
+            app_ids[midpoint:],
+            force_refresh=force_refresh,
+        )
+        first_games = first.get("response", {}).get("games")
+        second_games = second.get("response", {}).get("games")
+        if not isinstance(first_games, list) or not isinstance(second_games, list):
+            raise ValueError("Steam returned an invalid split Top achievements response.")
+        return {"response": {"games": first_games + second_games}}
+
+
 async def get_achievement_summaries(
     steam_id: str,
     *,
@@ -200,18 +260,30 @@ async def get_achievement_summaries(
     }
     app_ids = sorted(games_by_id)
     if not app_ids:
-        result = {"steamid": steam_id, "games": [], "errors": {}}
+        result = {
+            "steamid": steam_id,
+            "games": [],
+            "trophies": [],
+            "errors": {},
+        }
         if batch_index is not None:
             result.update(
                 batch_index=batch_index,
                 batch_count=0,
-                batch_size=settings.top_achievements_batch_size,
+                batch_size=min(
+                    settings.top_achievements_batch_size,
+                    MAX_TOP_ACHIEVEMENTS_BATCH_SIZE,
+                ),
             )
         return result
 
     summaries: dict[int, dict] = {}
+    trophies: list[dict] = []
     errors: dict[int, dict] = {}
-    batch_size = settings.top_achievements_batch_size
+    batch_size = min(
+        settings.top_achievements_batch_size,
+        MAX_TOP_ACHIEVEMENTS_BATCH_SIZE,
+    )
     batch_count = (len(app_ids) + batch_size - 1) // batch_size
     if batch_index is not None and batch_index >= batch_count:
         raise ValueError("Achievement summary batch is out of range.")
@@ -223,16 +295,10 @@ async def get_achievement_summaries(
     for current_batch_index in batch_indices:
         offset = current_batch_index * batch_size
         batch = app_ids[offset:offset + batch_size]
-        params = {
-            "steamid": steam_id,
-            "language": "english",
-            "max_achievements": settings.top_achievements_max,
-            **{f"appids[{index}]": app_id for index, app_id in enumerate(batch)},
-        }
         try:
-            response = await steam_request(
-                "IPlayerService/GetTopAchievementsForGames/v1/",
-                params,
+            response = await _request_top_achievement_chunk(
+                steam_id,
+                batch,
                 force_refresh=force_refresh,
             )
         except Exception as error:
@@ -242,9 +308,10 @@ async def get_achievement_summaries(
                 else None
             )
             logger.warning(
-                "Steam achievement summary batch failed batch_size=%s "
+                "Steam achievement summary batch failed batch=%s appids=%s "
                 "status=%s reason=%s",
-                len(batch),
+                current_batch_index,
+                batch,
                 status or "n/a",
                 type(error).__name__,
             )
@@ -254,7 +321,13 @@ async def get_achievement_summaries(
                     batch,
                     games_by_id,
                 )
-                summaries.update(fallback_summaries)
+                for app_id, fallback in fallback_summaries.items():
+                    summary, game_trophies = _legacy_achievement_summary_payload(
+                        app_id,
+                        fallback,
+                    )
+                    summaries[app_id] = summary
+                    trophies.extend(game_trophies)
                 errors.update(fallback_errors)
                 continue
             for app_id in batch:
@@ -277,7 +350,13 @@ async def get_achievement_summaries(
                     batch,
                     games_by_id,
                 )
-                summaries.update(fallback_summaries)
+                for app_id, fallback in fallback_summaries.items():
+                    summary, game_trophies = _legacy_achievement_summary_payload(
+                        app_id,
+                        fallback,
+                    )
+                    summaries[app_id] = summary
+                    trophies.extend(game_trophies)
                 errors.update(fallback_errors)
                 continue
             for app_id in batch:
@@ -296,7 +375,13 @@ async def get_achievement_summaries(
                     batch,
                     games_by_id,
                 )
-                summaries.update(fallback_summaries)
+                for app_id, fallback in fallback_summaries.items():
+                    summary, game_trophies = _legacy_achievement_summary_payload(
+                        app_id,
+                        fallback,
+                    )
+                    summaries[app_id] = summary
+                    trophies.extend(game_trophies)
                 errors.update(fallback_errors)
             else:
                 for app_id in batch:
@@ -308,13 +393,14 @@ async def get_achievement_summaries(
             top_game = top_by_id.get(app_id)
             normalized = _normalize_top_summary(
                 app_id,
-                games_by_id[app_id],
                 top_game,
             )
             if normalized is None:
                 needs_fallback.append(app_id)
             else:
-                summaries[app_id] = normalized
+                summary, game_trophies = normalized
+                summaries[app_id] = summary
+                trophies.extend(game_trophies)
 
         # Do not turn an incomplete batch into hundreds of legacy requests.
         # A small number of individually missing/truncated entries is safe to
@@ -335,12 +421,23 @@ async def get_achievement_summaries(
             needs_fallback,
             games_by_id,
         )
-        summaries.update(fallback_summaries)
+        for app_id, fallback in fallback_summaries.items():
+            summary, game_trophies = _legacy_achievement_summary_payload(
+                app_id,
+                fallback,
+            )
+            summaries[app_id] = summary
+            trophies.extend(game_trophies)
         errors.update(fallback_errors)
 
     result = {
         "steamid": steam_id,
-        "games": [summaries[app_id] for app_id in app_ids if app_id in summaries],
+        "games": [
+            summaries[app_id]
+            for app_id in app_ids
+            if app_id in summaries
+        ],
+        "trophies": trophies,
         "errors": {str(app_id): error for app_id, error in errors.items()},
     }
     if batch_index is not None:
@@ -352,7 +449,7 @@ async def get_achievement_summaries(
     return result
 
 
-def _normalize_top_summary(app_id: int, owned_game: dict, top_game: dict | None):
+def _normalize_top_summary(app_id: int, top_game: dict | None):
     if not isinstance(top_game, dict):
         return None
     total = top_game.get("total_achievements")
@@ -361,45 +458,205 @@ def _normalize_top_summary(app_id: int, owned_game: dict, top_game: dict | None)
         not isinstance(total, int)
         or isinstance(total, bool)
         or total < 0
-        or not isinstance(achievements, list)
-        or len(achievements) > total
-        or len(achievements) >= settings.top_achievements_max
     ):
         return None
 
-    unlocked = []
-    for item in achievements:
-        if not isinstance(item, dict):
+    tier_counts = {"bronze": 0, "silver": 0, "gold": 0}
+    trophy_columns = {
+        tier: {
+            "names": [],
+            "descriptions": [],
+            "icons": [],
+            "gray_icons": [],
+            "percentages": [],
+        }
+        for tier in tier_counts
+    }
+    compact_columns = top_game.get("achievement_columns")
+    if compact_columns is not None:
+        if not isinstance(compact_columns, dict):
             return None
-        percent = item.get("player_percent_unlocked")
+        for tier, columns in compact_columns.items():
+            if tier not in tier_counts or not isinstance(columns, dict):
+                return None
+            fields = ("names", "descriptions", "icons", "gray_icons", "percentages")
+            if not all(isinstance(columns.get(field), list) for field in fields):
+                return None
+            column_count = len(columns["names"])
+            if not all(len(columns[field]) == column_count for field in fields):
+                return None
+            if column_count:
+                trophy_columns[tier] = columns
+                tier_counts[tier] = column_count
+    else:
+        if not isinstance(achievements, list):
+            return None
+        if len(achievements) > total or len(achievements) >= settings.top_achievements_max:
+            return None
+        for item in achievements:
+            if not isinstance(item, dict):
+                return None
+            percent = item.get("player_percent_unlocked")
+            try:
+                percent = float(percent) if percent is not None else None
+            except (TypeError, ValueError):
+                percent = None
+            if percent is not None and not math.isfinite(percent):
+                percent = None
+            tier = _achievement_tier(percent)
+            tier_counts[tier] += 1
+            columns = trophy_columns[tier]
+            columns["names"].append(str(item.get("name") or ""))
+            columns["descriptions"].append(str(item.get("desc") or ""))
+            columns["icons"].append(_top_achievement_icon_url(app_id, item.get("icon")))
+            columns["gray_icons"].append(_top_achievement_icon_url(app_id, item.get("icon_gray")))
+            columns["percentages"].append(percent)
+
+    unlocked_count = sum(tier_counts.values())
+    if unlocked_count > total or unlocked_count >= settings.top_achievements_max:
+        return None
+    summary = {
+        "appid": app_id,
+        "achievement_count": total,
+        "unlocked_count": unlocked_count,
+        "tier_counts": tier_counts,
+        "available": True,
+    }
+    groups = [
+        {
+            "appid": app_id,
+            "tier": tier,
+            "columns": columns,
+        }
+        for tier, columns in trophy_columns.items()
+        if columns["names"]
+    ]
+    return summary, groups
+
+
+def _compact_top_achievement_response(data: Any):
+    response = data.get("response") if isinstance(data, dict) else None
+    top_games = response.get("games") if isinstance(response, dict) else None
+    if not isinstance(top_games, list):
+        return data
+
+    compact_games = []
+    for top_game in top_games:
+        if not isinstance(top_game, dict) or not str(top_game.get("appid", "")).isdigit():
+            continue
+        app_id = int(top_game["appid"])
+        achievements = top_game.get("achievements")
+        compact_game = {
+            "appid": app_id,
+            "total_achievements": top_game.get("total_achievements"),
+        }
+        if (
+            not isinstance(achievements, list)
+            or len(achievements) >= settings.top_achievements_max
+        ):
+            compact_game["summary_invalid"] = True
+            compact_games.append(compact_game)
+            continue
+
+        columns_by_tier = {
+            tier: {
+                "names": [],
+                "descriptions": [],
+                "icons": [],
+                "gray_icons": [],
+                "percentages": [],
+            }
+            for tier in ("bronze", "silver", "gold")
+        }
+        invalid = False
+        for item in achievements:
+            if not isinstance(item, dict):
+                invalid = True
+                break
+            percent = item.get("player_percent_unlocked")
+            try:
+                percent = float(percent) if percent is not None else None
+            except (TypeError, ValueError):
+                percent = None
+            if percent is not None and not math.isfinite(percent):
+                percent = None
+            columns = columns_by_tier[_achievement_tier(percent)]
+            columns["names"].append(str(item.get("name") or ""))
+            columns["descriptions"].append(str(item.get("desc") or ""))
+            columns["icons"].append(_top_achievement_icon_url(app_id, item.get("icon")))
+            columns["gray_icons"].append(_top_achievement_icon_url(app_id, item.get("icon_gray")))
+            columns["percentages"].append(percent)
+        if invalid:
+            compact_game["summary_invalid"] = True
+        else:
+            compact_game["achievement_columns"] = columns_by_tier
+        compact_games.append(compact_game)
+
+    return {"response": {"games": compact_games}}
+
+
+def _achievement_tier(percent: float | None) -> str:
+    if percent is not None and percent <= 15:
+        return "gold"
+    if percent is not None and percent <= 40:
+        return "silver"
+    return "bronze"
+
+
+def _legacy_achievement_summary_payload(
+    app_id: int,
+    result: dict,
+):
+    achievements = result.get("achievements", [])
+    tier_counts = {"bronze": 0, "silver": 0, "gold": 0}
+    trophy_columns = {
+        tier: {
+            "names": [],
+            "descriptions": [],
+            "icons": [],
+            "gray_icons": [],
+            "percentages": [],
+        }
+        for tier in tier_counts
+    }
+    for achievement in achievements:
+        if not isinstance(achievement, dict) or not (
+            achievement.get("achieved") is True
+            or str(achievement.get("achieved", "")) == "1"
+        ):
+            continue
+        percent = achievement.get("global_percent")
         try:
             percent = float(percent) if percent is not None else None
         except (TypeError, ValueError):
             percent = None
-        unlocked.append({
-            "name": item.get("name") or "",
-            "description": item.get("desc") or "",
-            "achieved": True,
-            "unlocktime": None,
-            "icon": _top_achievement_icon_url(app_id, item.get("icon")),
-            "icongray": _top_achievement_icon_url(app_id, item.get("icon_gray")),
-            "global_percent": percent,
-            "hidden": item.get("hidden"),
-        })
-
+        if percent is not None and not math.isfinite(percent):
+            percent = None
+        tier = _achievement_tier(percent)
+        tier_counts[tier] += 1
+        columns = trophy_columns[tier]
+        columns["names"].append(
+            str(achievement.get("name") or achievement.get("apiname") or ""),
+        )
+        columns["descriptions"].append(str(achievement.get("description") or ""))
+        columns["icons"].append(achievement.get("icon") or "")
+        columns["gray_icons"].append(achievement.get("icongray") or "")
+        columns["percentages"].append(percent)
     return {
         "appid": app_id,
-        "game": {
+        "achievement_count": result.get("achievement_count", len(achievements)),
+        "unlocked_count": sum(tier_counts.values()),
+        "tier_counts": tier_counts,
+        "available": result.get("available", False),
+    }, [
+        {
             "appid": app_id,
-            "name": owned_game.get("name") or top_game.get("name") or "",
-        },
-        "achievements": unlocked,
-        "achievement_count": total,
-        "unlocked_count": len(unlocked),
-        "available": True,
-        "details_complete": False,
-        "source": "top",
-    }
+            "tier": tier,
+            "columns": columns,
+        }
+        for tier, columns in trophy_columns.items()
+        if columns["names"]
+    ]
 
 
 def _top_achievement_icon_url(app_id: int, icon: object) -> str:
@@ -418,32 +675,6 @@ def _top_achievement_icon_url(app_id: int, icon: object) -> str:
     )
 
 
-async def _legacy_achievement_summary(steam_id: str, app_id: int, owned_game: dict):
-    result = await get_player_achievements(steam_id, app_id)
-    achievements = result.get("achievements", [])
-    unlocked_count = sum(
-        1
-        for achievement in achievements
-        if achievement.get("achieved") is True
-        or str(achievement.get("achieved", "")) == "1"
-    )
-    return {
-        "appid": app_id,
-        "game": {
-            "appid": app_id,
-            "name": result.get("game", {}).get("name") or owned_game.get("name") or "",
-        },
-        "achievements": achievements,
-        "achievement_count": result.get("achievement_count", len(achievements)),
-        "unlocked_count": unlocked_count,
-        "available": result.get("available", False),
-        "details_complete": True,
-        "icons_complete": result.get("icons_complete", False),
-        "source": "legacy_fallback",
-        "reason": result.get("reason"),
-    }
-
-
 async def _legacy_summaries_for_batch(
     steam_id: str,
     app_ids: list[int],
@@ -453,11 +684,7 @@ async def _legacy_summaries_for_batch(
     errors = {}
     for app_id in app_ids:
         try:
-            summaries[app_id] = await _legacy_achievement_summary(
-                steam_id,
-                app_id,
-                games_by_id[app_id],
-            )
+            summaries[app_id] = await get_player_achievements(steam_id, app_id)
         except Exception as error:
             status = (
                 error.response.status_code

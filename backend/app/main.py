@@ -210,7 +210,7 @@ async def steam_games(steam_id: str):
 async def steam_achievement_summaries(
     steam_id: str,
     force_refresh: bool = False,
-    batch_index: int | None = Query(default=None, ge=0),
+    batch_index: int = Query(default=0, ge=0),
 ):
     try:
         result = await get_achievement_summaries(
