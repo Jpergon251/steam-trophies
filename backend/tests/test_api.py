@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 
 import app.services.steam as steam_service
-from app.main import InMemoryRateLimiter, app
+from app.main import InMemoryRateLimiter, app, fastapi_app
 
 STEAM_ID = "76561199548509683"
 
@@ -89,7 +89,7 @@ class ApiCompatibilityTests(unittest.IsolatedAsyncioTestCase):
             patch("app.main.get_owned_games", new=AsyncMock(side_effect=AssertionError)),
             patch("app.main.get_player_achievements", new=AsyncMock(side_effect=AssertionError)),
         ):
-            async with app.router.lifespan_context(app):
+            async with fastapi_app.router.lifespan_context(fastapi_app):
                 response = await request_app("/api/health", client_port=5220)
 
         self.assertEqual(response.status_code, 200)
@@ -113,6 +113,121 @@ class ApiCompatibilityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status_code, 502)
         self.assertNotIn(secret, result.text)
         self.assertNotIn(secret, "\n".join(logs.output))
+
+    async def test_upstream_429_is_logged_and_returned_as_cors_enabled_502(self):
+        upstream_request = httpx.Request("GET", "https://api.steampowered.com/")
+        upstream_response = httpx.Response(429, request=upstream_request)
+        upstream_error = httpx.HTTPStatusError(
+            "Steam rate limit",
+            request=upstream_request,
+            response=upstream_response,
+        )
+        with (
+            patch(
+                "app.main.get_player_achievements",
+                new=AsyncMock(side_effect=upstream_error),
+            ),
+            self.assertLogs("app.main", level="WARNING") as logs,
+        ):
+            response = await request_app(
+                f"/api/steam/profile/{STEAM_ID}/games/952060/achievements",
+                headers={"Origin": "https://jpergon251.github.io"},
+                client_ip="127.0.0.31",
+            )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(
+            response.headers.get("access-control-allow-origin"),
+            "https://jpergon251.github.io",
+        )
+        self.assertIn("original_status=429", "\n".join(logs.output))
+        self.assertIn("final_status=502", "\n".join(logs.output))
+        self.assertIn("reason=steam_rate_limited", "\n".join(logs.output))
+
+    async def test_backend_rate_limit_429_includes_cors_and_reason(self):
+        with (
+            patch("app.main.settings.rate_limit_search", 1),
+            patch("app.main.search_steam_profile", new=AsyncMock(return_value={"ok": True})),
+        ):
+            await request_app(
+                "/api/steam/search?q=first",
+                headers={"Origin": "https://jpergon251.github.io"},
+                client_ip="127.0.0.32",
+            )
+            with self.assertLogs("app.main", level="WARNING") as logs:
+                response = await request_app(
+                    "/api/steam/search?q=second",
+                    headers={"Origin": "https://jpergon251.github.io"},
+                    client_ip="127.0.0.32",
+                )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(
+            response.headers.get("access-control-allow-origin"),
+            "https://jpergon251.github.io",
+        )
+        self.assertEqual(
+            response.headers.get("x-ratelimit-reason"),
+            "search_requests_per_ip",
+        )
+        self.assertIn("reason=rate_limit", "\n".join(logs.output))
+
+    async def test_achievement_rate_limit_logs_app_and_returns_cors_429(self):
+        with (
+            patch("app.main.settings.rate_limit_achievements", 1),
+            patch(
+                "app.main.get_player_achievements",
+                new=AsyncMock(return_value={"available": True}),
+            ),
+        ):
+            await request_app(
+                f"/api/steam/profile/{STEAM_ID}/games/952060/achievements",
+                headers={"Origin": "https://jpergon251.github.io"},
+                client_ip="127.0.0.35",
+            )
+            with self.assertLogs("app.main", level="WARNING") as logs:
+                response = await request_app(
+                    f"/api/steam/profile/{STEAM_ID}/games/952060/achievements",
+                    headers={"Origin": "https://jpergon251.github.io"},
+                    client_ip="127.0.0.35",
+                )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(
+            response.headers.get("access-control-allow-origin"),
+            "https://jpergon251.github.io",
+        )
+        self.assertEqual(
+            response.headers.get("x-ratelimit-reason"),
+            "achievements_requests_per_ip",
+        )
+        output = "\n".join(logs.output)
+        self.assertIn("appid=952060", output)
+        self.assertIn("steam_id=…9683", output)
+        self.assertIn("final_status=429", output)
+
+    async def test_backend_400_and_502_errors_include_cors_headers(self):
+        invalid_profile = await request_app(
+            "/api/steam/profile/123/games",
+            headers={"Origin": "https://jpergon251.github.io"},
+            client_ip="127.0.0.33",
+        )
+        with patch(
+            "app.main.search_steam_profile",
+            new=AsyncMock(side_effect=RuntimeError("upstream unavailable")),
+        ):
+            upstream_failure = await request_app(
+                "/api/steam/search?q=example",
+                headers={"Origin": "https://jpergon251.github.io"},
+                client_ip="127.0.0.34",
+            )
+
+        for response, status in ((invalid_profile, 400), (upstream_failure, 502)):
+            self.assertEqual(response.status_code, status)
+            self.assertEqual(
+                response.headers.get("access-control-allow-origin"),
+                "https://jpergon251.github.io",
+            )
 
     async def test_metrics_mask_full_steam_id(self):
         with (

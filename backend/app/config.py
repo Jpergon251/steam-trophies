@@ -42,7 +42,7 @@ class Settings:
     rate_limit_search = _int_setting("RATE_LIMIT_SEARCH_PER_MINUTE", 20)
     rate_limit_profile = _int_setting("RATE_LIMIT_PROFILE_PER_MINUTE", 30)
     rate_limit_games = _int_setting("RATE_LIMIT_GAMES_PER_MINUTE", 30)
-    rate_limit_achievements = _int_setting("RATE_LIMIT_ACHIEVEMENTS_PER_MINUTE", 300)
+    rate_limit_achievements = _int_setting("RATE_LIMIT_ACHIEVEMENTS_PER_MINUTE", 1200)
 
 
 settings = Settings()

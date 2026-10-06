@@ -4,6 +4,7 @@ import logging
 import random
 import re
 import time
+from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
 import httpx
@@ -16,16 +17,47 @@ logger = logging.getLogger(__name__)
 STEAM_API_BASE = "https://api.steampowered.com"
 STEAM_ID64_PATTERN = re.compile(r"^\d{17}$")
 _http_client: httpx.AsyncClient | None = None
-_steam_semaphore: asyncio.Semaphore | None = None
+
+
+class SteamConcurrencyLimiter:
+    def __init__(self, limit: int):
+        self._semaphore = asyncio.Semaphore(limit)
+        self._active = 0
+        self._pending = 0
+
+    @asynccontextmanager
+    async def slot(self):
+        self._pending += 1
+        try:
+            await self._semaphore.acquire()
+        finally:
+            self._pending -= 1
+
+        self._active += 1
+        try:
+            yield
+        finally:
+            self._active -= 1
+            self._semaphore.release()
+
+    def stats(self) -> tuple[int, int]:
+        return self._active, self._pending
+
+
+_steam_semaphore: SteamConcurrencyLimiter | None = None
 
 
 def configure_steam_runtime(
     client: httpx.AsyncClient | None,
-    semaphore: asyncio.Semaphore | None,
+    semaphore: SteamConcurrencyLimiter | None,
 ) -> None:
     global _http_client, _steam_semaphore
     _http_client = client
     _steam_semaphore = semaphore
+
+
+def steam_concurrency_stats() -> tuple[int, int]:
+    return _steam_semaphore.stats() if _steam_semaphore else (0, 0)
 
 
 def _cache_ttl(endpoint: str) -> int:
@@ -49,11 +81,15 @@ async def steam_request(endpoint: str, params: dict, *, force_refresh: bool = Fa
     cache_key = f"steam:{endpoint}:{json.dumps(params, sort_keys=True, separators=(',', ':'))}"
 
     async def load_response():
+        request_metrics = current_request_metrics.get()
+        if request_metrics is not None:
+            request_metrics.app_id = params.get("appid", params.get("gameid"))
+
         for attempt in range(settings.steam_max_retries + 1):
             metrics = current_request_metrics.get()
             wait_started = time.perf_counter()
             try:
-                async with _steam_semaphore:
+                async with _steam_semaphore.slot():
                     if metrics is not None:
                         metrics.steam_wait_ms += (time.perf_counter() - wait_started) * 1000
                         metrics.steam_requests += 1
@@ -71,9 +107,19 @@ async def steam_request(endpoint: str, params: dict, *, force_refresh: bool = Fa
                     response.raise_for_status()
                     return response.json()
             except httpx.HTTPStatusError as error:
+                if metrics is not None:
+                    metrics.upstream_status = error.response.status_code
                 retryable = error.response.status_code in {429, 500, 502, 503, 504}
                 if not retryable or attempt >= settings.steam_max_retries:
+                    if metrics is not None:
+                        metrics.failure_reason = (
+                            "steam_rate_limited"
+                            if error.response.status_code == 429
+                            else "steam_upstream_error"
+                        )
                     raise
+                if metrics is not None and error.response.status_code == 429:
+                    metrics.failure_reason = "steam_429_retrying"
             except (httpx.TimeoutException, httpx.NetworkError):
                 if attempt >= settings.steam_max_retries:
                     raise

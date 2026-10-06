@@ -1,4 +1,4 @@
-import asyncio
+import hashlib
 import logging
 import re
 import time
@@ -16,6 +16,8 @@ from app.services.steam import (
     get_player_achievements,
     get_steam_profile,
     search_steam_profile,
+    SteamConcurrencyLimiter,
+    steam_concurrency_stats,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,7 +36,10 @@ async def lifespan(app: FastAPI):
         max_keepalive_connections=settings.steam_max_keepalive_connections,
     )
     client = httpx.AsyncClient(timeout=timeout, limits=limits)
-    configure_steam_runtime(client, asyncio.Semaphore(settings.steam_max_concurrency))
+    configure_steam_runtime(
+        client,
+        SteamConcurrencyLimiter(settings.steam_max_concurrency),
+    )
     try:
         yield
     finally:
@@ -67,20 +72,10 @@ class InMemoryRateLimiter:
 
 rate_limiter = InMemoryRateLimiter()
 app = FastAPI(title="Steam Trophies API", lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://jpergon251.github.io",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+fastapi_app = app
 
 _STEAM_ID_IN_PATH = re.compile(r"/profile/(\d{17})(/|$)")
+_APP_ID_IN_PATH = re.compile(r"/games/(\d+)/achievements$")
 
 
 def _request_identity(request: Request) -> tuple[str, str | None]:
@@ -90,6 +85,10 @@ def _request_identity(request: Request) -> tuple[str, str | None]:
     if match:
         steam_id = match.group(1)
     return path, steam_id
+
+
+def _masked_client_ip(client_ip: str) -> str:
+    return hashlib.sha256(client_ip.encode()).hexdigest()[:10]
 
 
 def _rate_limit_group(path: str) -> tuple[str, int] | None:
@@ -115,10 +114,31 @@ async def observe_and_limit_requests(request: Request, call_next):
         client_ip = request.client.host if request.client else "unknown"
         allowed, retry_after = rate_limiter.check(client_ip, group[0], group[1])
         if not allowed:
+            active, pending = steam_concurrency_stats()
+            app_match = _APP_ID_IN_PATH.search(path)
+            logger.warning(
+                "request_rejected reason=rate_limit group=%s endpoint=%s "
+                "steam_id=%s appid=%s original_status=n/a final_status=429 "
+                "limit=%s window_seconds=%s client_ip_hash=%s steam_active=%s "
+                "steam_pending=%s retry_after=%s",
+                group[0],
+                _STEAM_ID_IN_PATH.sub(r"/profile/{steam_id}\2", path),
+                masked_steam_id(steam_id),
+                app_match.group(1) if app_match else "n/a",
+                group[1],
+                settings.rate_limit_window_seconds,
+                _masked_client_ip(client_ip),
+                active,
+                pending,
+                retry_after,
+            )
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests. Please try again shortly."},
-                headers={"Retry-After": str(retry_after)},
+                headers={
+                    "Retry-After": str(retry_after),
+                    "X-RateLimit-Reason": f"{group[0]}_requests_per_ip",
+                },
             )
 
     metrics = RequestMetrics()
@@ -132,13 +152,20 @@ async def observe_and_limit_requests(request: Request, call_next):
     finally:
         current_request_metrics.reset(token)
         if request.url.path.startswith("/api/steam/"):
+            active, pending = steam_concurrency_stats()
+            app_match = _APP_ID_IN_PATH.search(path)
             logger.info(
-                "Steam API request endpoint=%s steam_id=%s status=%s total_ms=%.1f "
-                "steam_ms=%.1f steam_wait_ms=%.1f steam_requests=%s cache_hits=%s "
-                "cache_misses=%s deduplicated=%s retries=%s games=%s",
+                "steam_request endpoint=%s steam_id=%s appid=%s original_status=%s "
+                "final_status=%s reason=%s total_ms=%.1f steam_ms=%.1f "
+                "steam_wait_ms=%.1f steam_requests=%s cache_hits=%s "
+                "cache_misses=%s deduplicated=%s retries=%s games=%s "
+                "steam_active=%s steam_pending=%s",
                 _STEAM_ID_IN_PATH.sub(r"/profile/{steam_id}\2", path),
                 masked_steam_id(steam_id),
+                metrics.app_id or (app_match.group(1) if app_match else "n/a"),
+                metrics.upstream_status or "n/a",
                 status_code,
+                metrics.failure_reason or "none",
                 (time.perf_counter() - started) * 1000,
                 metrics.steam_time_ms,
                 metrics.steam_wait_ms,
@@ -148,6 +175,8 @@ async def observe_and_limit_requests(request: Request, call_next):
                 metrics.deduplicated,
                 metrics.retries,
                 metrics.games_count if metrics.games_count is not None else "n/a",
+                active,
+                pending,
             )
 
 
@@ -191,16 +220,23 @@ async def steam_achievements(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     except Exception as error:
-        upstream_status = (
-            error.response.status_code
-            if isinstance(error, httpx.HTTPStatusError)
-            else None
-        )
+        upstream_status = error.response.status_code if isinstance(error, httpx.HTTPStatusError) else None
+        metrics = current_request_metrics.get()
+        if metrics is not None:
+            metrics.upstream_status = upstream_status
+            metrics.failure_reason = (
+                "steam_rate_limited"
+                if upstream_status == 429
+                else "upstream_error" if upstream_status is not None
+                else type(error).__name__
+            )
         logger.warning(
-            "Steam achievements request failed for app %s (%s, upstream status: %s)",
+            "steam_achievement_failure steam_id=%s appid=%s original_status=%s "
+            "final_status=502 reason=%s",
+            masked_steam_id(steam_id),
             app_id,
-            type(error).__name__,
             upstream_status or "n/a",
+            "steam_rate_limited" if upstream_status == 429 else type(error).__name__,
         )
         raise HTTPException(status_code=502, detail="Steam achievements are not available right now.")
 
@@ -220,3 +256,16 @@ async def steam_profile(steam_id: str = Query(..., min_length=1)):
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+app = CORSMiddleware(
+    app=app,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://jpergon251.github.io",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)

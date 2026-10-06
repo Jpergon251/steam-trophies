@@ -28,7 +28,7 @@ maximum observed concurrency without contacting Steam.
 ## Current profile request flow
 
 The Vue store loads the profile and owned-games list first, displays that
-library, then processes stale achievements progressively with five workers per
+library, then processes stale achievements progressively with three workers per
 browser profile. Grid/list changes use that same local store and do not call the
 backend. The backend retains the existing routes and response shapes:
 
@@ -81,7 +81,7 @@ global percentages cache.
   are copied on read/write to prevent one response's normalization from
   mutating other callers' cached values.
 - In-memory fixed-window limits default to 20 searches, 30 profile lookups,
-  30 library requests, and 300 achievement requests per IP per minute.
+  30 library requests, and 1,200 achievement requests per IP per minute.
   Limits and cached data are process-local; they reset on restart and are not
   shared among multiple Render instances.
 

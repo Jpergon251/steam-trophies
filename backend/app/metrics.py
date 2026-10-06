@@ -12,6 +12,9 @@ class RequestMetrics:
     steam_wait_ms: float = 0
     steam_time_ms: float = 0
     games_count: int | None = None
+    app_id: int | str | None = None
+    upstream_status: int | None = None
+    failure_reason: str | None = None
 
 
 current_request_metrics: ContextVar[RequestMetrics | None] = ContextVar(

@@ -21,7 +21,7 @@ const NEGATIVE_ACHIEVEMENT_CACHE_TTL = 5 * 60 * 1000
 // Keep concurrent Steam achievement requests bounded. Steam's API is rate
 // limited and firing 100+ requests at once is what triggered the previous
 // implementation's instability.
-const ACHIEVEMENT_CONCURRENCY = 5
+const ACHIEVEMENT_CONCURRENCY = 3
 
 function getArtUrls(game) {
   if (!game || !game.appid) {
@@ -451,8 +451,9 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
       const id = String(steamId)
       const queue = [...gamesToRefresh]
       const total = queue.length
+      let rateLimitError = null
       const workers = Array.from({ length: Math.min(ACHIEVEMENT_CONCURRENCY, total) }, async () => {
-        while (queue.length) {
+        while (queue.length && !rateLimitError) {
           const game = queue.shift()
           if (!game) return
           try {
@@ -467,9 +468,19 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
               await this.storeAchievementResult(id, game, achievements, true)
             }
           } catch (error) {
-            // A failed request is transient: keep the last-known data and let
-            // the next sync retry. Other games keep processing.
-            console.info(`Skipping temporary achievement failure for ${game.name}.`, error?.status || error)
+            if (error?.status === 429) {
+              rateLimitError = error
+              this.errors[id] = error
+              console.warn(
+                `Achievement refresh paused after rate limiting at ${game.name}; remaining games stay stale and eligible for the next sync.`,
+                error,
+              )
+            } else {
+              console.warn(
+                `Keeping cached achievements for ${game.name} after a temporary refresh failure.`,
+                error,
+              )
+            }
           } finally {
             const sync = this.syncs[id]
             if (sync && sync.phase === 'achievements') sync.processed += 1

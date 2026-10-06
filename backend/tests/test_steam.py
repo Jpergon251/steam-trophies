@@ -8,7 +8,11 @@ import httpx
 import app.services.steam as steam_service
 from app.cache import AsyncTTLCache
 from app.config import settings
-from app.services.steam import get_player_achievements, steam_request
+from app.services.steam import (
+    SteamConcurrencyLimiter,
+    get_player_achievements,
+    steam_request,
+)
 
 
 class GetPlayerAchievementsTests(unittest.IsolatedAsyncioTestCase):
@@ -82,7 +86,7 @@ class SteamTransportTests(unittest.IsolatedAsyncioTestCase):
 
         settings.steam_max_retries = 2
         self.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-        steam_service.configure_steam_runtime(self.client, asyncio.Semaphore(2))
+        steam_service.configure_steam_runtime(self.client, SteamConcurrencyLimiter(2))
 
         with patch("app.services.steam.asyncio.sleep", new=AsyncMock()):
             result = await steam_request("test/retry", {"id": "retry-case"})
@@ -100,7 +104,7 @@ class SteamTransportTests(unittest.IsolatedAsyncioTestCase):
 
         settings.steam_max_retries = 2
         self.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-        steam_service.configure_steam_runtime(self.client, asyncio.Semaphore(1))
+        steam_service.configure_steam_runtime(self.client, SteamConcurrencyLimiter(1))
 
         with self.assertRaises(httpx.HTTPStatusError):
             await steam_request("test/not-found", {"id": "missing"})
@@ -122,7 +126,7 @@ class SteamTransportTests(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(200, json={"ok": True}, request=request)
 
         self.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-        steam_service.configure_steam_runtime(self.client, asyncio.Semaphore(2))
+        steam_service.configure_steam_runtime(self.client, SteamConcurrencyLimiter(2))
 
         await asyncio.gather(*(
             steam_request("test/concurrency", {"id": str(index)})
@@ -146,7 +150,7 @@ class SteamTransportTests(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(200, json={"ok": True}, request=request)
 
         self.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-        steam_service.configure_steam_runtime(self.client, asyncio.Semaphore(8))
+        steam_service.configure_steam_runtime(self.client, SteamConcurrencyLimiter(8))
         requests = [
             steam_request(
                 "IPlayerService/GetOwnedGames/v1/",
