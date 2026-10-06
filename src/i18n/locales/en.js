@@ -2,9 +2,9 @@ export default {
   header: {
     home: 'Steam Trophies home',
     title: 'Steam Trophies',
-    edition: 'A new way to collect',
     refresh: 'Refresh',
     refreshAria: 'Refresh Steam data',
+    refreshing: 'Updating',
     language: 'Language',
     languages: {
       en: 'English',
@@ -43,12 +43,19 @@ export default {
   },
   profile: {
     backToDiscovery: 'Back to discovery',
-    eyebrow: 'Your collection begins here',
     retrieving: 'Retrieving Steam profile',
     searchAnother: 'Search another profile',
     steamProfile: 'STEAM PROFILE',
+    avatarAlt: "{name}'s Steam avatar",
     steamId: 'STEAMID',
     openSteamProfile: 'Open Steam profile',
+    overview: 'Player collection overview',
+    trophyBreakdown: 'Unlocked trophies by tier and completed games',
+    stats: {
+      games: 'GAMES',
+      trophies: 'TROPHIES',
+      completed: '100% COMPLETE',
+    },
     privateCollection: 'This collection is private or unavailable right now.',
     cacheStatus: {
       cached: 'Cached data · unable to refresh right now',
@@ -67,6 +74,7 @@ export default {
       silver: 'Silver',
       gold: 'Gold',
       diamond: 'Diamond',
+      title: 'Trophy Cabinet',
       diamondTrophyName: 'Diamond Trophy',
       diamondCompleted: '100% Completed',
     },
@@ -75,6 +83,12 @@ export default {
       title: 'Your collection',
       subtitle: 'Explore your complete game library',
       gamesCount: 'GAMES',
+      viewModeAria: 'Game display mode',
+      gridViewAria: 'Grid view',
+      listViewAria: 'List view',
+      openGame: 'View {name} details',
+      trophies: 'trophies',
+      noTrophies: 'No achievements available',
       searchPlaceholder: 'Search your games...',
       searchAria: 'Search your games',
       filterAria: 'Filter games',
@@ -198,4 +212,3 @@ export default {
     disclaimer: 'Steam and the Steam logo are trademarks of Valve Corporation. This project is not affiliated with Valve.',
   },
 }
-

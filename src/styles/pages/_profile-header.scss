@@ -40,16 +40,21 @@
   }
 
   &__avatar-frame {
+    position: relative;
     display: grid;
-    width: $space-20;
-    height: $space-20;
-    margin-bottom: $space-6;
+    width: 104px;
+    height: 104px;
+    margin-bottom: $space-4;
     overflow: hidden;
     place-items: center;
     border: 1px solid $glass-white-10;
-    border-radius: $radius-xl;
-    background: $color-bg-elevated;
-    box-shadow: $shadow-lg, $glow-white;
+    border-radius: 50%;
+    corner-shape: squircle;
+    background: radial-gradient(circle at 35% 25%, $color-bg-surface, $color-bg-secondary 72%);
+    box-shadow:
+      0 0 0 5px rgba(255, 255, 255, 0.012),
+      0 14px 36px rgba(0, 0, 0, 0.42),
+      0 0 42px rgba($trophy-diamond, 0.055);
   }
 
   &__avatar {
@@ -62,19 +67,22 @@
   }
 
   &__name {
-    margin: $space-3 0 0;
+    width: 100%;
+    margin: $space-2 0 0;
     color: $color-text-primary;
-    font-size: clamp($font-size-3xl, 6vw, $font-size-5xl);
+    font-size: clamp($font-size-3xl, 4.5vw, 3.5rem);
     font-weight: $font-weight-light;
     letter-spacing: $letter-spacing-tight;
     line-height: $line-height-tight;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
 
   &__real-name {
     margin: $space-2 0 0;
     color: $color-text-secondary;
     font-size: $font-size-md;
+    line-height: $line-height-snug;
+    overflow-wrap: anywhere;
   }
 
   &__steam-id {
@@ -93,7 +101,8 @@
   }
 
   &__steam-link {
-    margin-top: $space-5;
+    min-height: $button-height-sm;
+    margin-top: $space-2;
     color: $color-text-secondary;
     font-size: $font-size-sm;
   }
@@ -101,8 +110,23 @@
 
 @media (max-width: $breakpoint-md) {
   .profile-page__avatar-frame {
-    width: $space-16;
-    height: $space-16;
-    border-radius: $radius-lg;
+    width: 92px;
+    height: 92px;
+  }
+  .profile-page__name {
+    font-size: clamp($font-size-2xl, 7vw, $font-size-4xl);
+  }
+}
+
+@media (max-width: $breakpoint-sm) {
+  .profile-page__avatar-frame {
+    width: 84px;
+    height: 84px;
+  }
+  .profile-page__real-name {
+    font-size: $font-size-md;
+  }
+  .profile-page__steam-id {
+    margin-top: $space-3;
   }
 }

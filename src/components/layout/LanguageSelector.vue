@@ -104,7 +104,10 @@ onBeforeUnmount(() => {
 
 .lang-selector__trigger {
   display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
   padding: 0.3rem 0.55rem;
   background: rgba(255, 255, 255, 0.04);
@@ -112,7 +115,7 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   color: #a1a1a1;
   font-family: inherit;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 180ms ease;
@@ -132,7 +135,7 @@ onBeforeUnmount(() => {
 
 .lang-selector__code {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.72rem;
+  font-size: 0.8125rem;
   letter-spacing: 0.04em;
 }
 
@@ -164,12 +167,13 @@ onBeforeUnmount(() => {
 
 .lang-selector__item {
   display: flex;
+  min-height: 44px;
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0.6rem;
   border-radius: 5px;
   color: #a1a1a1;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   cursor: pointer;
   transition: all 120ms ease;
 }

@@ -27,20 +27,20 @@
       <RecentSearches />
 
       <div class="landing__collection" aria-label="Four trophy tiers">
-        <div class="landing__tier landing__tier--bronze">
-          <Medal class="landing__tier-icon" :size="17" :stroke-width="1.5" />
+        <div class="landing__tier landing__tier--bronze trophy-tier--bronze">
+          <Trophy class="landing__tier-icon" :size="17" :stroke-width="1.5" />
           <span>{{ $t('landing.tiers.bronze') }}</span>
         </div>
-        <div class="landing__tier landing__tier--silver">
-          <Award class="landing__tier-icon" :size="17" :stroke-width="1.5" />
+        <div class="landing__tier landing__tier--silver trophy-tier--silver">
+          <Trophy class="landing__tier-icon" :size="17" :stroke-width="1.5" />
           <span>{{ $t('landing.tiers.silver') }}</span>
         </div>
-        <div class="landing__tier landing__tier--gold">
+        <div class="landing__tier landing__tier--gold trophy-tier--gold">
           <Trophy class="landing__tier-icon" :size="17" :stroke-width="1.5" />
           <span>{{ $t('landing.tiers.gold') }}</span>
         </div>
-        <div class="landing__tier landing__tier--diamond">
-          <Gem class="landing__tier-icon" :size="17" :stroke-width="1.5" />
+        <div class="landing__tier landing__tier--diamond trophy-tier--diamond">
+          <Diamond class="landing__tier-icon" :size="17" :stroke-width="1.5" />
           <span>{{ $t('landing.tiers.diamond') }}</span>
         </div>
       </div>
@@ -50,7 +50,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { Award, Gem, Medal, Trophy } from '@lucide/vue'
+import { Diamond, Trophy } from '@lucide/vue'
 import SteamProfilePreview from '../components/profile/SteamProfilePreview.vue'
 import SteamSearch from '../components/ui/SteamSearch.vue'
 import RecentSearches from '../components/landing/RecentSearches.vue'
@@ -90,7 +90,6 @@ async function handleSearch(query) {
       }
     }
   } catch (error) {
-    console.error('Steam profile search failed.', error)
     if (currentSearch === searchVersion) {
       errorCode.value = error.status || 500
       status.value = 'error'

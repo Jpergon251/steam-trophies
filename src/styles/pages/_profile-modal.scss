@@ -1,14 +1,17 @@
 @use "../abstracts/variables" as *;
 
-.trophy-modal,
-.game-detail-modal {
+.trophy-modal {
   position: fixed;
   z-index: $z-modal;
   inset: 0;
   display: grid;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: $space-6;
   place-items: center;
   background: rgba(0, 0, 0, 0.78);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
   backdrop-filter: blur($glass-blur-md);
 }
 
@@ -16,8 +19,10 @@
   &__card {
     position: relative;
     width: min(100%, 480px);
-    max-height: 94svh;
+    max-height: min(94dvh, 820px);
     overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     padding: $space-10 $space-8;
     border: 1px solid $glass-white-15;
     border-top: 3px solid $color-border-default;
@@ -232,70 +237,12 @@
     transform: translate(-50%, -50%) rotate(36deg);
     border-color: rgba($trophy-diamond, 0.1);
   }
-  &__artwork {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    width: 204px;
-    height: 204px;
-    margin-bottom: $space-6;
-    place-items: center;
-    border: 1px solid rgba($trophy-diamond-light, 0.23);
-    border-radius: $radius-circle;
-    background: radial-gradient(
-      circle at 32% 24%,
-      rgba(255, 255, 255, 0.2),
-      rgba($trophy-diamond, 0.09) 48%,
-      rgba(8, 16, 22, 0.25) 75%
-    );
-    box-shadow:
-      inset 0 2px 14px rgba(255, 255, 255, 0.17),
-      0 0 44px rgba($trophy-diamond, 0.16),
-      0 24px 40px rgba(0, 0, 0, 0.38);
-  }
-  &__artwork::after {
-    position: absolute;
-    inset: 8px;
-    border: 1px solid rgba($trophy-diamond-light, 0.1);
-    border-radius: inherit;
-    content: "";
-  }
-  &__artwork img {
-    width: 156px;
-    height: 156px;
-    border: 1px solid $glass-white-15;
-    border-radius: $radius-circle;
-    object-fit: cover;
-    filter: drop-shadow(0 0 21px rgba($trophy-diamond, 0.35));
-  }
-  &__fallback {
-    color: $trophy-diamond-light;
-    filter: drop-shadow(0 0 18px rgba($trophy-diamond, 0.45));
-  }
-  &__seal {
-    position: absolute;
-    right: 2px;
-    bottom: 12px;
-    z-index: 2;
-    display: grid;
-    width: 46px;
-    height: 46px;
-    place-items: center;
-    border: 1px solid rgba($trophy-diamond-light, 0.32);
-    border-radius: $radius-circle;
-    background: linear-gradient(145deg, #132632, #071015);
-    color: $trophy-diamond-light;
-    font-size: $font-size-lg;
-    box-shadow:
-      0 0 24px rgba($trophy-diamond, 0.28),
-      inset 0 1px 5px rgba(255, 255, 255, 0.17);
-  }
   &__eyebrow {
     position: relative;
     z-index: 1;
     margin: 0 0 $space-2;
     color: $trophy-diamond;
-    font-size: 9px;
+    font-size: $font-size-xs;
     letter-spacing: 0.24em;
     text-transform: uppercase;
   }
@@ -322,7 +269,7 @@
   }
   &__reward small {
     color: $trophy-diamond;
-    font-size: 9px;
+    font-size: $font-size-xs;
     letter-spacing: 0.12em;
   }
   &__completion {
@@ -354,390 +301,22 @@
   }
 }
 
-.game-detail-modal__panel {
-  position: relative;
-  display: flex;
-  width: min(100%, 820px);
-  max-height: min(92svh, 900px);
-  flex-direction: column;
-  overflow: hidden;
-  padding: $space-8;
-  border: 1px solid $glass-white-15;
-  border-radius: $radius-xl;
-  background: $color-bg-elevated;
-  box-shadow: $shadow-xl;
-}
-.game-detail__header {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  min-height: 220px;
-  align-items: end;
-  overflow: hidden;
-  padding: $space-8;
-  border-radius: $radius-md;
-  background:
-    linear-gradient(
-      180deg,
-      rgba($color-bg-primary, 0.04),
-      rgba($color-bg-primary, 0.93)
-    ),
-    linear-gradient(90deg, rgba($color-bg-primary, 0.58), transparent),
-    $color-bg-secondary;
-}
-.game-detail__header::after {
-  position: absolute;
-  z-index: -2;
-  inset: 0;
-  background: var(--game-artwork) center 34% / cover;
-  content: "";
-  filter: saturate(0.78);
-}
-.game-detail__header::before {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  border: 1px solid $glass-white-08;
-  border-radius: inherit;
-  content: "";
-}
-.game-detail__artwork {
-  display: none;
-}
-.game-detail__title {
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-}
-.game-detail__title h2 {
-  margin: $space-2 0;
-  color: $color-text-primary;
-  font-size: clamp($font-size-2xl, 4vw, $font-size-4xl);
-  font-weight: $font-weight-light;
-  letter-spacing: $letter-spacing-tight;
-  overflow-wrap: anywhere;
-}
-.game-detail__title span {
-  color: rgba(255, 255, 255, 0.72);
-  font-size: $font-size-sm;
-}
-.game-detail__progress {
-  height: 2px;
-  margin: $space-3 0;
-  overflow: hidden;
-  border-radius: $radius-pill;
-  background: rgba(255, 255, 255, 0.13);
-}
-.game-detail__progress span {
-  display: block;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.82);
-}
-.game-detail__progress span.game-detail__progress--diamond {
-  background: linear-gradient(
-    90deg,
-    $trophy-diamond-dark,
-    $trophy-diamond-light
-  );
-  box-shadow: 0 0 7px rgba($trophy-diamond, 0.32);
-}
-.game-detail__summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: $space-4;
-  margin: $space-3 0 $space-5;
-  color: $color-text-tertiary;
-  font-size: $font-size-xs;
-}
-.game-detail__diamond-label {
-  display: inline-flex;
-  align-items: center;
-  gap: $space-1;
-  color: $trophy-diamond-light;
-  letter-spacing: $letter-spacing-wider;
-}
-.game-detail__completion {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: $space-3 $space-5;
-  margin-top: $space-3;
-}
-.game-detail__completion > strong {
-  color: $color-text-primary;
-  font-family: $font-mono;
-  font-size: clamp($font-size-xl, 3vw, $font-size-3xl);
-  font-weight: $font-weight-light;
-}
-.game-detail__completion > strong span {
-  color: rgba(255, 255, 255, 0.55);
-  font-size: $font-size-lg;
-}
-.game-detail__completion-percent {
-  color: $color-text-primary;
-  font-family: $font-mono;
-  font-size: $font-size-lg;
-}
-.game-detail__remaining {
-  color: rgba(255, 255, 255, 0.72);
-  font-size: $font-size-sm;
-}
-.game-detail__achievements {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  overflow: auto;
-}
-.game-detail__achievements h3 {
-  margin: $space-1 0 $space-3;
-  color: $color-text-primary;
-  font-size: $font-size-xl;
-  font-weight: $font-weight-light;
-}
-.game-detail__achievements > header {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: $space-3;
-  margin-bottom: $space-2;
-}
-.game-detail__achievement-total {
-  padding-bottom: $space-3;
-  color: $color-text-tertiary;
-  font-family: $font-mono;
-  font-size: $font-size-xs;
-}
-.game-detail__filters {
-  display: flex;
-  width: fit-content;
-  max-width: 100%;
-  align-items: center;
-  gap: $space-1;
-  margin: 0 0 $space-3;
-  padding: $space-1;
-  border-bottom: 1px solid $glass-white-10;
-}
-.game-detail__filters button {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  gap: $space-2;
-  padding: $space-2 $space-3;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  background: transparent;
-  color: $color-text-tertiary;
-  font-size: $font-size-xs;
-  letter-spacing: $letter-spacing-wider;
-  text-transform: uppercase;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: color $transition-normal, border-color $transition-normal, background $transition-normal;
-}
-.game-detail__filters button span {
-  color: $color-text-muted;
-  font-family: $font-mono;
-  letter-spacing: 0;
-}
-.game-detail__filters button:hover,
-.game-detail__filters button.is-active {
-  border-bottom-color: $glass-white-20;
-  color: $color-text-primary;
-}
-.game-detail__filters button.is-active span {
-  color: $color-text-secondary;
-}
-.game-detail__filters button:focus-visible {
-  outline: 2px solid $trophy-diamond;
-  outline-offset: 2px;
-}
-.game-detail__shelves {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-.game-detail__empty-filter {
-  margin: $space-4 0;
-  color: $color-text-tertiary;
-  font-size: $font-size-sm;
-}
-.game-detail__achievements .trophy-shelf {
-  flex: 0 0 auto;
-  padding-block: $space-3;
-}
-.game-detail__achievements .trophy-shelf__header {
-  margin-bottom: 0;
-}
-.game-detail__achievements .trophy-shelf__title h2 {
-  color: $color-text-secondary;
-  font-size: $font-size-xs;
-}
-.game-detail__achievements .trophy-shelf__rail {
-  gap: $space-2;
-  padding: 0 0 $space-2;
-  cursor: grab;
-  touch-action: pan-x pan-y;
-}
-.game-detail__achievements .trophy-shelf__rail:active {
-  cursor: grabbing;
-}
-.game-detail__achievements .trophy-card {
-  cursor: grab;
-}
-.game-detail__achievements .trophy-card:active {
-  cursor: grabbing;
-}
-.game-detail__achievements .trophy-card--locked {
-  flex-basis: 108px;
-  min-width: 108px;
-  min-height: 128px;
-}
-.game-detail__achievements .trophy-card__icon-wrap {
-  width: 86px;
-  height: 86px;
-  flex-basis: 86px;
-}
-.game-detail__achievements .trophy-card__achievement-icon {
-  width: 76px;
-  height: 76px;
-}
-.game-detail-modal .trophy-modal__card--locked .trophy-modal__achievement-image {
-  filter: grayscale(1) brightness(0.62);
-  opacity: 0.72;
-}
-.game-detail-modal .trophy-modal__locked-state {
-  display: inline-flex;
-  align-items: center;
-  gap: $space-2;
-  color: $color-text-tertiary;
-  font-size: $font-size-xs;
-  letter-spacing: $letter-spacing-wider;
-}
-.game-detail__achievements .trophy-card__lock {
-  position: absolute;
-  top: $space-2;
-  right: $space-2;
-  color: $color-text-tertiary;
-}
-.game-detail__achievements .trophy-shelf--compact {
-  width: 100%;
-}
-.game-detail__achievements .trophy-shelf--compact .trophy-shelf__header {
-  display: block;
-}
-.game-detail__achievements .trophy-shelf--compact .trophy-shelf__controls,
-.game-detail__achievements .trophy-shelf--compact .trophy-shelf__state {
-  display: none;
-}
-.game-detail__achievements .trophy-shelf--compact .trophy-shelf__rail {
-  display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-@media (max-width: $breakpoint-md) {
-  .game-detail-modal {
-    padding: $space-2;
-  }
-  .game-detail-modal__panel {
-    max-height: 96svh;
-    padding: $space-5 $space-4;
-    border-radius: $radius-lg;
-  }
-  .game-detail__header {
-    min-height: 190px;
-    padding: $space-5;
-  }
-  .game-detail__summary {
-    gap: $space-3;
-  }
-  .game-detail__filters {
-    width: 100%;
-  }
-  .game-detail__filters button {
-    flex: 1 1 0;
-  }
-}
-
-@media (max-width: $breakpoint-sm) {
-  .trophy-modal {
-    padding: $space-3;
-  }
-  .trophy-modal__card {
-    padding: $space-8 $space-5;
-  }
-  .trophy-modal__achievement-image {
-    width: 140px;
-    height: 140px;
-  }
-  .game-detail-modal__panel {
-    padding: $space-3;
-  }
-  .game-detail__header {
-    min-height: 170px;
-    padding: $space-4;
-  }
-  .game-detail__completion {
-    gap: $space-2 $space-3;
-  }
-  .game-detail__completion > strong {
-    font-size: $font-size-xl;
-  }
-  .game-detail__completion-percent {
-    font-size: $font-size-sm;
-  }
-  .game-detail__filters {
-    gap: 0;
-  }
-  .game-detail__filters button {
-    min-width: 0;
-    gap: $space-1;
-    padding-inline: $space-2;
-    font-size: 10px;
-    letter-spacing: 0.04em;
-  }
-  .diamond-exhibit__artwork {
-    width: 168px;
-    height: 168px;
-    margin-bottom: $space-5;
-  }
-  .diamond-exhibit__artwork img {
-    width: 128px;
-    height: 128px;
-  }
-  .diamond-exhibit__halo {
-    width: 230px;
-  }
-  .diamond-exhibit__orbit--one {
-    width: 230px;
-    height: 80px;
-  }
-  .diamond-exhibit__orbit--two {
-    width: 200px;
-    height: 64px;
-  }
-  .trophy-modal__card--diamond {
-    padding: $space-10 $space-5;
-    border-radius: $radius-xl;
-  }
-}
-
-
 /* Shared trophy showcase modal system */
 .trophy-modal {
-  padding: clamp($space-3, 4vw, $space-8);
+  align-items: center;
+  padding: clamp($space-5, 5vw, $space-8);
   background: $color-overlay-modal;
   backdrop-filter: blur($modal-blur) saturate(80%);
   -webkit-backdrop-filter: blur($modal-blur) saturate(80%);
 }
 .trophy-modal__card {
   width: min(100%, 520px);
-  max-height: min(92svh, 820px);
+  max-height: min(92dvh, 820px);
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
   padding: clamp($space-8, 6vw, $space-12) clamp($space-5, 6vw, $space-10);
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-top: 1px solid rgba(255, 255, 255, 0.16);
@@ -746,10 +325,6 @@
   box-shadow: $modal-shadow;
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
-.trophy-modal__card--bronze { --modal-tier: #{$modal-tier-bronze}; --modal-tier-glow: #{rgba($trophy-bronze, 0.24)}; }
-.trophy-modal__card--silver { --modal-tier: #{$modal-tier-silver}; --modal-tier-glow: #{rgba($trophy-silver, 0.2)}; }
-.trophy-modal__card--gold { --modal-tier: #{$modal-tier-gold}; --modal-tier-glow: #{rgba($trophy-gold, 0.22)}; }
-.trophy-modal__card--unclassified { --modal-tier: #{$color-text-secondary}; --modal-tier-glow: #{rgba(255, 255, 255, 0.1)}; }
 .trophy-modal__close {
   width: 44px;
   height: 44px;
@@ -775,11 +350,12 @@
 .trophy-modal__piece--locked { border-color: rgba(255, 255, 255, 0.12); background: radial-gradient(circle, rgba(255, 255, 255, 0.035), rgba(0, 0, 0, 0.38) 74%); box-shadow: inset 0 1px 8px rgba(255, 255, 255, 0.04); }
 .trophy-modal__achievement-image { width: 76%; height: 76%; margin: 0; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 50%; object-fit: cover; filter: drop-shadow(0 12px 23px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 13px var(--modal-tier-glow)); }
 .trophy-modal__piece--locked .trophy-modal__achievement-image { filter: grayscale(1) brightness(0.64) drop-shadow(0 6px 12px rgba(0, 0, 0, 0.36)); opacity: 0.78; }
-.trophy-modal__trophy-icon { color: var(--modal-tier); filter: drop-shadow(0 0 11px var(--modal-tier-glow)); }
+.trophy-modal__trophy-icon { width: 72%; height: 72%; color: var(--modal-tier); filter: drop-shadow(0 0 11px var(--modal-tier-glow)); }
 .trophy-modal__piece--locked .trophy-modal__trophy-icon { color: $color-text-secondary; filter: grayscale(1); opacity: 0.72; }
 .trophy-modal__shine { position: absolute; inset: -45% auto -45% -50%; width: 36%; transform: rotate(35deg) translateX(-280%); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.43), transparent); filter: blur(6px); pointer-events: none; }
-.trophy-modal__piece:not(.trophy-modal__piece--locked) .trophy-modal__shine { animation: trophy-shine 700ms $ease-expressive 200ms both; }
-.trophy-modal__eyebrow { margin: 0 0 $space-2 !important; color: var(--modal-tier) !important; font-size: $font-size-xs; font-weight: $font-weight-medium; letter-spacing: $letter-spacing-uppercase; text-transform: uppercase; }
+.trophy-modal__piece:not(.trophy-modal__piece--locked) .trophy-modal__shine { animation: trophy-shine 1200ms $ease-expressive 200ms both; }
+.trophy-modal__shine--active { animation: trophy-shine 1200ms $ease-expressive both; }
+.trophy-modal__eyebrow { margin: 0 0 $space-2 !important; color: var(--modal-tier) !important; font-size: $font-size-sm; font-weight: $font-weight-medium; letter-spacing: $letter-spacing-uppercase; text-transform: uppercase; }
 .trophy-modal__card h2 { margin: $space-2 0 $space-3; font-size: clamp($font-size-xl, 4vw, $font-size-2xl); letter-spacing: -0.035em; line-height: 1.2; overflow-wrap: anywhere; }
 .trophy-modal__game { min-height: 30px; color: $color-text-tertiary; }
 .trophy-modal__game img { width: 24px; height: 24px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: $radius-xs; object-fit: cover; }
@@ -791,7 +367,7 @@
 .trophy-modal__locked-state { color: $color-text-secondary !important; }
 .trophy-modal__card dl { flex-wrap: wrap; gap: $space-5 $space-10; margin-top: $space-5; padding-top: $space-4; border-top: 1px solid rgba(255, 255, 255, 0.08); }
 .trophy-modal__card dl > div { min-width: 90px; }
-.trophy-modal__card dt { color: $color-text-tertiary; font-size: $font-size-xs; letter-spacing: 0.08em; }
+.trophy-modal__card dt { color: $color-text-secondary; font-size: $font-size-xs; letter-spacing: 0.08em; }
 .trophy-modal__card dd { color: $color-text-secondary; font-size: $font-size-sm; }
 
 .trophy-modal-enter-active,
@@ -810,7 +386,7 @@
 
 .trophy-modal__card--diamond {
   width: min(100%, 660px);
-  min-height: min(680px, 92svh);
+  min-height: min(680px, 92dvh);
   justify-content: center;
   padding: clamp($space-8, 7vw, $space-12);
   border-color: rgba($trophy-diamond-light, 0.22);
@@ -819,10 +395,8 @@
 }
 .trophy-modal__card--diamond::before { position: absolute; z-index: 0; inset: -3%; border-radius: inherit; background: var(--modal-artwork) center / cover no-repeat; content: ""; opacity: 0.76; filter: saturate(1.2) brightness(0.72); -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, #000 28%, rgba(0, 0, 0, 0.78) 52%, rgba(0, 0, 0, 0.32) 72%, transparent 94%); mask-image: radial-gradient(ellipse at center, #000 0%, #000 28%, rgba(0, 0, 0, 0.78) 52%, rgba(0, 0, 0, 0.32) 72%, transparent 94%); pointer-events: none; }
 .trophy-modal__card--diamond::after { position: absolute; z-index: 0; inset: 0; border-radius: inherit; background: radial-gradient(ellipse at center, rgba(2, 5, 8, 0.18) 0%, rgba(2, 5, 8, 0.38) 56%, rgba(2, 5, 8, 0.76) 100%); content: ""; pointer-events: none; }
-.diamond-exhibit__artwork { display: none !important; }
 .trophy-modal__card--diamond > * { position: relative; z-index: 1; }
 .trophy-modal__card--diamond > .trophy-modal__close { position: absolute; z-index: 4; }
-.trophy-modal__card--diamond > :not(.diamond-exhibit__artwork) { z-index: 1; }
 .diamond-exhibit__halo { position: absolute; z-index: 0; top: 2%; left: 50%; width: min(430px, 76vw); aspect-ratio: 1; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(circle, rgba($trophy-diamond, 0.16), rgba($trophy-diamond, 0.045) 38%, transparent 70%); filter: blur(13px); pointer-events: none; }
 .diamond-exhibit__orbit { position: absolute; top: 50%; left: 50%; border: 1px solid rgba($trophy-diamond-light, 0.12); border-radius: 50%; transform: translate(-50%, -50%) rotate(-22deg); }
 .diamond-exhibit__orbit--one { width: 340px; height: 116px; }
@@ -840,13 +414,13 @@
 .diamond-exhibit__gem--locked .diamond-exhibit__gem-icon { fill: rgba(160, 177, 184, 0.055); filter: grayscale(0.7); opacity: 0.7; }
 .diamond-exhibit__gem--locked::after { display: none; }
 .diamond-exhibit__gem-lock { position: absolute; z-index: 4; top: 48%; left: 50%; transform: translate(-50%, -50%); color: rgba(235, 245, 248, 0.82); filter: drop-shadow(0 2px 5px #000); }
-.diamond-exhibit__eyebrow { position: relative; z-index: 2; margin: 0 0 $space-2; color: $trophy-diamond-light; font-size: $font-size-xs; letter-spacing: 0.16em; text-transform: uppercase; animation: diamond-copy-in 380ms ease 630ms both; }
+.diamond-exhibit__eyebrow { position: relative; z-index: 2; margin: 0 0 $space-2; color: $trophy-diamond-light; font-size: $font-size-sm; letter-spacing: 0.16em; text-transform: uppercase; animation: diamond-copy-in 380ms ease 630ms both; }
 .diamond-exhibit__earned-date { position: relative; z-index: 2; margin: 0 0 $space-2; color: $color-text-secondary; font-size: $font-size-sm; animation: diamond-copy-in 380ms ease 650ms both; }
 .diamond-exhibit__locked-label { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: $space-2; margin: 0 0 $space-1; color: $color-text-secondary; font-size: $font-size-sm; }
 .trophy-modal__card--diamond h2 { position: relative; z-index: 2; max-width: 100%; margin: $space-2 0 $space-4; font-size: clamp($font-size-2xl, 5vw, $font-size-4xl); letter-spacing: -0.045em; line-height: 1.12; animation: diamond-copy-in 420ms ease 680ms both; }
 .diamond-exhibit__reward { position: relative; z-index: 2; display: flex; align-items: center; gap: $space-4; padding: $space-3 $space-5; border: 1px solid rgba($trophy-diamond-light, 0.19); border-radius: $radius-pill; background: rgba(4, 9, 12, 0.58); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05); animation: diamond-copy-in 420ms ease 740ms both; }
 .diamond-exhibit__reward span { color: $trophy-diamond-light; font-size: $font-size-sm; font-weight: $font-weight-semibold; letter-spacing: 0.14em; }
-.diamond-exhibit__reward small { color: rgba(226, 243, 248, 0.76); font-size: $font-size-xs; letter-spacing: 0.08em; }
+.diamond-exhibit__reward small { color: rgba(226, 243, 248, 0.9); font-size: $font-size-sm; letter-spacing: 0.08em; }
 .diamond-exhibit__completion { position: relative; z-index: 2; display: flex; align-items: baseline; gap: $space-2; margin-top: $space-5; color: $color-text-secondary; animation: diamond-copy-in 420ms ease 800ms both; }
 .diamond-exhibit__completion strong { color: #fff; font-family: $font-mono; font-size: $font-size-xl; font-weight: $font-weight-light; }
 .diamond-exhibit__completion span { font-size: $font-size-sm; }
@@ -860,19 +434,26 @@
 @keyframes diamond-shine { 0% { opacity: 0; transform: translateX(-55%); } 20% { opacity: 0.8; } 100% { opacity: 0; transform: translateX(55%); } }
 @keyframes diamond-copy-in { from { transform: translateY(6px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @media (max-width: $breakpoint-md) {
-  .trophy-modal__card--diamond { min-height: min(620px, 94svh); }
+  .trophy-modal__card--diamond { min-height: min(620px, 94dvh); }
 }
 @media (max-width: $breakpoint-sm) {
-  .trophy-modal { padding: $space-3; }
-  .trophy-modal__card { width: min(100%, 520px); max-height: 94svh; padding: $space-8 $space-5; border-radius: $radius-lg; }
-  .trophy-modal__card--diamond { width: min(100%, 600px); min-height: min(600px, 94svh); padding: $space-8 $space-5; }
+  .trophy-modal {
+    place-items: start center;
+    padding-top: max($space-4, env(safe-area-inset-top));
+    padding-right: max($space-4, env(safe-area-inset-right));
+    padding-bottom: max($space-4, env(safe-area-inset-bottom));
+    padding-left: max($space-4, env(safe-area-inset-left));
+  }
+  .trophy-modal__card { width: 100%; max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - #{$space-8}); padding: $space-8 $space-5; border-radius: $radius-lg; }
+  .trophy-modal__achievement-image { width: 140px; height: 140px; }
+  .trophy-modal__card--diamond { width: 100%; min-height: 0; padding: $space-8 $space-5; }
   .diamond-exhibit__gem { width: clamp(150px, 46vw, 190px); margin-bottom: $space-3; }
   .diamond-exhibit__halo { width: min(320px, 84vw); }
   .diamond-exhibit__orbit--one { width: 260px; height: 90px; }
   .diamond-exhibit__orbit--two { width: 230px; height: 74px; }
   .diamond-exhibit__reward { gap: $space-2; padding-inline: $space-3; }
-  .diamond-exhibit__reward span { font-size: $font-size-xs; }
-  .diamond-exhibit__reward small { font-size: 9px; }
+  .diamond-exhibit__reward span { font-size: $font-size-sm; }
+  .diamond-exhibit__reward small { font-size: $font-size-sm; }
 }
 @media (max-width: 359px) {
   .trophy-modal__card { padding-inline: $space-4; }
@@ -881,6 +462,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .trophy-modal *, .trophy-modal *::before, .trophy-modal *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  .trophy-modal__shine { animation: none !important; }
   .trophy-modal-enter-from .trophy-modal__card,
   .trophy-modal-leave-to .trophy-modal__card { transform: none; }
 }

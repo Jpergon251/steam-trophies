@@ -5,6 +5,7 @@
   isolation: isolate;
   display: flex;
   min-height: 100svh;
+  min-height: 100dvh;
   flex-direction: column;
   overflow: hidden;
   background:
@@ -17,8 +18,7 @@
       ellipse at 50% 100%,
       rgba(255, 255, 255, 0.025),
       transparent 52%
-    ),
-    $color-bg-primary;
+    );
 
   &::before,
   &::after {
@@ -66,14 +66,6 @@
   &__topline {
     min-height: $header-height;
     animation: landing-arrive $duration-normal $ease-expressive both;
-
-    &--profile {
-      position: relative;
-      top: auto;
-      right: auto;
-      left: auto;
-      flex: 0 0 $header-height;
-    }
   }
 
   &__wordmark {
@@ -88,6 +80,10 @@
     text-transform: uppercase;
   }
 
+  &__wordmark-label {
+    white-space: nowrap;
+  }
+
   &__mark {
     display: grid;
     width: $space-8;
@@ -99,10 +95,68 @@
     color: $color-text-secondary;
   }
 
-  &__edition {
+  &__topline-actions,
+  &__refresh-group {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  &__topline-actions {
+    gap: $space-3;
+  }
+
+  &__refresh-group {
+    gap: $space-2;
+  }
+
+  &__refresh {
+    display: inline-flex;
+    min-height: $button-height-md;
+    align-items: center;
+    justify-content: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    border: 1px solid $glass-white-10;
+    border-radius: $radius-sm;
+    background: $glass-white-04;
+    color: $color-text-primary;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    cursor: pointer;
+    transition:
+      background $transition-normal,
+      border-color $transition-normal,
+      transform $transition-normal;
+  }
+
+  &__refresh:hover:not(:disabled) {
+    border-color: $glass-white-20;
+    background: $glass-white-08;
+  }
+
+  &__refresh:disabled {
+    opacity: 0.56;
+    cursor: wait;
+  }
+
+  &__refresh:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &__refresh:focus-visible {
+    outline: 2px solid $trophy-diamond;
+    outline-offset: 3px;
+  }
+
+  &__refresh-icon {
+    flex: 0 0 auto;
+  }
+
+  &__countdown {
     color: $color-text-secondary;
     font-family: $font-mono;
     font-size: $font-size-sm;
+    font-variant-numeric: tabular-nums;
     letter-spacing: $letter-spacing-wide;
   }
 
@@ -195,28 +249,20 @@
   }
 
   &__tier-icon {
-    color: currentColor;
+    color: var(--modal-tier);
+    filter: drop-shadow(0 0 7px var(--modal-tier-glow));
   }
 
   &__tier--bronze &__tier-icon {
-    color: $trophy-bronze;
-  }
-  &__tier--silver &__tier-icon {
-    color: $trophy-silver;
-  }
-  &__tier--gold &__tier-icon {
-    color: $trophy-gold;
-  }
-  &__tier--diamond &__tier-icon {
-    color: $trophy-diamond;
+    filter: drop-shadow(0 0 7px var(--modal-tier-glow));
   }
 
   &__footer {
     min-height: $header-height;
     border-top: 1px solid $color-border-subtle;
-    color: $color-text-muted;
+    color: $color-text-secondary;
     font-family: $font-mono;
-    font-size: $font-size-xs;
+    font-size: $font-size-sm;
     letter-spacing: $letter-spacing-wide;
     animation: landing-arrive $duration-normal $ease-expressive 540ms both;
   }
@@ -253,9 +299,18 @@
     &__topline,
     &__footer {
       min-height: $space-16;
+      padding-inline: max($space-4, env(safe-area-inset-left)) max($space-4, env(safe-area-inset-right));
     }
 
-    &__topline--profile { top: $space-4; }
+    &__refresh-label,
+    &__countdown {
+      display: none;
+    }
+
+    &__refresh {
+      width: $button-height-md;
+      padding: 0;
+    }
 
     &__content {
       padding-top: $space-12;
@@ -264,7 +319,7 @@
 
     &__eyebrow {
       margin-bottom: $space-4;
-      font-size: $font-size-xs;
+      font-size: $font-size-sm;
     }
 
     &__title {
@@ -285,19 +340,27 @@
     &__tier {
       flex-direction: column;
       gap: $space-1;
-      font-size: $font-size-xs;
+      font-size: $font-size-sm;
     }
 
     &__footer {
-      font-size: $font-size-xs;
+      font-size: $font-size-sm;
     }
   }
 }
 
 @media (max-width: $breakpoint-xs) {
   .landing {
-    &__edition {
+    &__wordmark {
+      gap: $space-2;
+    }
+
+    &__wordmark-label {
       display: none;
+    }
+
+    &__topline-actions {
+      gap: $space-2;
     }
 
     &__collection {
@@ -305,7 +368,7 @@
     }
 
     &__tier {
-      font-size: $font-size-xs;
+      font-size: $font-size-sm;
     }
   }
 }

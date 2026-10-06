@@ -250,7 +250,7 @@ watch(appid, () => {
               v-for="(achievement, index) in visibleAchievements"
               :key="achievement.apiname || `${achievement.name}-${index}`"
               class="achievement-row"
-              :class="[`achievement-row--${achievementTier(achievement)}`, { 'achievement-row--locked': !isUnlocked(achievement) }]"
+              :class="[`achievement-row--${achievementTier(achievement)}`, `trophy-tier--${achievementTier(achievement)}`, { 'achievement-row--locked': !isUnlocked(achievement) }]"
             >
               <div class="achievement-row__icon-wrap">
                 <img v-if="achievement.icon" class="achievement-row__icon" :src="achievement.icon" :alt="`${achievement.name} icon`" loading="lazy" />

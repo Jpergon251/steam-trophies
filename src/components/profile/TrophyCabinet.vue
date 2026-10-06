@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import TrophyShelf from './TrophyShelf.vue'
+import { getTrophyTier } from '../../data/trophyTiers.js'
 
 const props = defineProps({
   trophies: { type: Array, default: () => [] },
@@ -12,10 +13,14 @@ defineEmits(['select-trophy', 'select-diamond'])
 
 const tierKeys = ['bronze', 'silver', 'gold']
 
+function trophyTier(trophy) {
+  return getTrophyTier(trophy.global_percent) || trophy.tier
+}
+
 const shelves = computed(() => ({
-  bronze: props.trophies.filter((item) => item.tier === 'bronze'),
-  silver: props.trophies.filter((item) => item.tier === 'silver'),
-  gold: props.trophies.filter((item) => item.tier === 'gold'),
+  bronze: props.trophies.filter((item) => trophyTier(item) === 'bronze'),
+  silver: props.trophies.filter((item) => trophyTier(item) === 'silver'),
+  gold: props.trophies.filter((item) => trophyTier(item) === 'gold'),
   diamond: props.games.filter((game) => game.isDiamond),
 }))
 </script>

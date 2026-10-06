@@ -1,174 +1,5 @@
 @use "../abstracts/variables" as *;
 
-.collection-game {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: $space-4;
-  padding: $space-3;
-  border: 0;
-  border-bottom: 1px solid $glass-white-08;
-  border-radius: $radius-md;
-  background: linear-gradient(105deg, $glass-white-04, transparent 74%);
-  color: $color-text-primary;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform $transition-normal,
-    background $transition-normal,
-    border-color $transition-normal;
-
-  &:hover {
-    transform: translateY(-2px);
-    border-bottom-color: $glass-white-15;
-    background: linear-gradient(105deg, $glass-white-08, transparent 78%);
-  }
-}
-
-.collection-game__artwork {
-  position: relative;
-  display: grid;
-  width: 76px;
-  height: 76px;
-  flex: 0 0 76px;
-  overflow: hidden;
-  place-items: center;
-  border-radius: $radius-sm;
-  background: $color-bg-surface;
-  box-shadow: $shadow-sm;
-}
-.collection-game__artwork img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.collection-game__placeholder {
-  color: $color-text-tertiary;
-  font-size: $font-size-2xl;
-}
-.collection-game__diamond {
-  position: absolute;
-  right: -5px;
-  bottom: -4px;
-  left: -5px;
-  padding: 3px 2px;
-  border: 1px solid rgba($trophy-diamond, 0.15);
-  border-radius: $radius-xs;
-  background: rgba(4, 12, 16, 0.9);
-  color: $trophy-diamond-light;
-  font-size: 9px;
-  letter-spacing: $letter-spacing-wide;
-  text-align: center;
-  text-shadow: 0 0 12px rgba($trophy-diamond, 0.35);
-  text-transform: uppercase;
-}
-.collection-game__info {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: $space-2;
-}
-.collection-game__heading,
-.collection-game__progress-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: $space-2;
-}
-.collection-game__heading strong {
-  overflow: hidden;
-  font-size: $font-size-sm;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.collection-game__heading svg {
-  flex: 0 0 auto;
-  color: $color-text-tertiary;
-}
-.collection-game__progress-label,
-.collection-game__empty {
-  color: $color-text-tertiary;
-  font-size: $font-size-xs;
-}
-.collection-game__progress-label span:last-child {
-  color: $color-text-secondary;
-  font-family: $font-mono;
-}
-.collection-game__track {
-  height: 2px;
-  overflow: hidden;
-  border-radius: $radius-pill;
-  background: $glass-white-10;
-}
-.collection-game__track span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    $color-text-secondary,
-    $color-text-primary
-  );
-  transition: width $transition-slow;
-}
-.collection-game__track--diamond span {
-  background: linear-gradient(
-    90deg,
-    $trophy-diamond-dark,
-    $trophy-diamond-light
-  );
-  box-shadow: 0 0 9px rgba($trophy-diamond, 0.38);
-}
-
-.game-card {
-  display: flex;
-  min-height: 92px;
-  align-items: center;
-  gap: $space-3;
-  padding: $space-3;
-  border: 1px solid $glass-white-08;
-  border-radius: $radius-md;
-  background: $glass-background;
-  color: $color-text-primary;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color $transition-normal,
-    background $transition-normal,
-    transform $transition-normal;
-}
-.game-card:hover {
-  transform: translateY(-2px);
-  border-color: $glass-white-20;
-  background: $glass-background-hover;
-}
-.game-card__image {
-  width: 56px;
-  height: 56px;
-  border-radius: $radius-sm;
-  background: $color-bg-surface;
-  object-fit: cover;
-}
-.game-card__body {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: $space-1;
-}
-.game-card__body strong {
-  overflow: hidden;
-  font-size: $font-size-sm;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.game-card__body span,
-.game-card__arrow {
-  color: $color-text-tertiary;
-  font-size: $font-size-xs;
-}
-
 .games-collection {
   width: 100%;
   min-width: 0;
@@ -177,6 +8,7 @@
 }
 .games-archive-heading {
   display: flex;
+  min-width: 0;
   align-items: end;
   justify-content: space-between;
   gap: $space-6;
@@ -209,9 +41,46 @@
   font-weight: $font-weight-light;
 }
 .games-archive-heading__count span {
-  color: $color-text-tertiary;
-  font-size: 9px;
+  color: $color-text-secondary;
+  font-size: $font-size-xs;
   letter-spacing: $letter-spacing-uppercase;
+}
+.games-archive-heading__tools {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: $space-4;
+}
+.games-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid $glass-white-08;
+  border-radius: $radius-sm;
+  background: rgba(0, 0, 0, 0.2);
+}
+.games-view-toggle button {
+  display: grid;
+  width: 40px;
+  min-height: 40px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: calc(#{$radius-sm} - 2px);
+  background: transparent;
+  color: $color-text-tertiary;
+  cursor: pointer;
+  transition: color $transition-normal, background $transition-normal, border-color $transition-normal;
+}
+.games-view-toggle button:hover,
+.games-view-toggle button.is-active {
+  border-color: $glass-white-08;
+  background: $glass-white-06;
+  color: $color-text-primary;
+}
+.games-view-toggle button:focus-visible {
+  outline: 2px solid $trophy-diamond;
+  outline-offset: 2px;
 }
 
 .games-toolbar {
@@ -300,7 +169,7 @@
 .games-filters button span {
   color: $color-text-muted;
   font-family: $font-mono;
-  font-size: 10px;
+  font-size: $font-size-xs;
   letter-spacing: 0;
 }
 .games-sort {
@@ -331,6 +200,156 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: $space-5 $space-4;
+}
+.archive-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: $space-2;
+}
+.archive-list-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 100px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: $space-4;
+  padding: $space-3 $space-4;
+  border: 1px solid $glass-white-06;
+  border-radius: $radius-sm;
+  background: linear-gradient(100deg, $glass-white-02, rgba(255, 255, 255, 0.005) 72%);
+  color: $color-text-primary;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color $transition-normal, background $transition-normal;
+}
+.archive-list-row:hover {
+  border-color: $glass-white-15;
+  background: linear-gradient(100deg, $glass-white-04, $glass-white-01 72%);
+}
+.archive-list-row:active {
+  background: $glass-white-06;
+}
+.archive-list-row:focus-visible {
+  outline: 2px solid $trophy-diamond;
+  outline-offset: 3px;
+}
+.archive-list-row__artwork {
+  position: relative;
+  display: block;
+  width: 100px;
+  aspect-ratio: 460 / 215;
+  overflow: hidden;
+  border: 1px solid $glass-white-10;
+  border-radius: $radius-xs;
+  background: radial-gradient(ellipse, $glass-white-06, $glass-white-01);
+}
+.archive-list-row__artwork img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.archive-list-row__fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: $color-text-tertiary;
+  font-size: $font-size-2xl;
+}
+.archive-list-row__body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: $space-2;
+}
+.archive-list-row__heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-4;
+}
+.archive-list-row__name {
+  min-width: 0;
+  overflow: hidden;
+  color: $color-text-primary;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.archive-list-row__completion {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: $space-4;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+  white-space: nowrap;
+}
+.archive-list-row__completion b {
+  color: $color-text-primary;
+  font-family: $font-mono;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+}
+.archive-list-row__empty {
+  color: $color-text-tertiary;
+  font-size: $font-size-sm;
+}
+.archive-list-row__details {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-5;
+}
+.archive-list-row__tiers {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: $space-4;
+}
+.archive-list-row__tier,
+.archive-list-row__diamond {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-1;
+  color: var(--modal-tier);
+  font-family: $font-mono;
+  font-size: $font-size-xs;
+  white-space: nowrap;
+}
+.archive-list-row__tier svg,
+.archive-list-row__diamond svg {
+  filter: drop-shadow(0 0 5px var(--modal-tier-glow));
+}
+.archive-list-row__track {
+  display: block;
+  width: min(100%, 300px);
+  height: 3px;
+  overflow: hidden;
+  border-radius: $radius-pill;
+  background: rgba(255, 255, 255, 0.12);
+}
+.archive-list-row__track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.76);
+}
+.archive-list-row--diamond .archive-list-row__track > span {
+  background: linear-gradient(90deg, $trophy-diamond-dark, $trophy-diamond-light);
+}
+.archive-list-row__arrow {
+  color: $color-text-tertiary;
+  transition: color $transition-normal, transform $transition-normal;
+}
+.archive-list-row:hover .archive-list-row__arrow {
+  color: $color-text-primary;
+  transform: translate(2px, -2px);
 }
 .archive-game {
   display: flex;
@@ -422,11 +441,12 @@
 }
 .archive-game__progress {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: $space-2;
-  color: rgba(255, 255, 255, 0.82);
-  font-size: $font-size-xs;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: $font-size-sm;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
 }
 .archive-game__progress b {
@@ -461,8 +481,8 @@
   box-shadow: 0 0 7px rgba($trophy-diamond, 0.36);
 }
 .archive-game__no-trophies {
-  color: rgba(255, 255, 255, 0.78);
-  font-size: $font-size-xs;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: $font-size-sm;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
 }
 .archive-game__diamond {
@@ -471,7 +491,8 @@
   top: $space-2;
   left: $space-2;
   display: inline-flex;
-  min-height: 27px;
+  max-width: calc(100% - #{$space-4});
+  min-height: $button-height-sm;
   align-items: center;
   gap: $space-1;
   padding: 4px $space-2;
@@ -479,7 +500,7 @@
   border-radius: $radius-pill;
   background: linear-gradient(110deg, rgba(6, 16, 20, 0.88), rgba($trophy-diamond-dark, 0.62));
   color: $trophy-diamond-light;
-  font-size: 8px;
+  font-size: $font-size-xs;
   letter-spacing: $letter-spacing-wider;
   text-transform: uppercase;
   text-shadow: 0 0 9px rgba($trophy-diamond, 0.35);
@@ -491,6 +512,8 @@
   filter: drop-shadow(0 0 5px rgba($trophy-diamond-light, 0.5));
 }
 .archive-game__diamond > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .archive-game__arrow {
@@ -507,8 +530,8 @@
 }
 .archive-game__playtime {
   padding-left: $space-1;
-  color: $color-text-tertiary;
-  font-size: 10px;
+  color: $color-text-secondary;
+  font-size: $font-size-xs;
 }
 .archive-game:hover .archive-game__artwork > img {
   transform: scale(1.065);
@@ -601,9 +624,9 @@
   gap: $space-4;
   margin-top: $space-5;
   border-top: 1px solid $glass-white-06;
-  color: $color-text-tertiary;
+  color: $color-text-secondary;
   font-family: $font-mono;
-  font-size: 10px;
+  font-size: $font-size-xs;
 }
 .games-pagination {
   display: flex;
@@ -613,8 +636,8 @@
 .games-pagination > button,
 .games-pagination__pages button {
   display: grid;
-  min-width: 36px;
-  min-height: 36px;
+  min-width: 44px;
+  min-height: 44px;
   place-items: center;
   border: 1px solid transparent;
   border-radius: $radius-circle;
@@ -693,7 +716,8 @@
     margin-top: $space-5;
   }
   .games-archive-heading {
-    align-items: center;
+    align-items: flex-start;
+    flex-direction: column;
     gap: $space-3;
     margin-bottom: $space-4;
     padding-bottom: $space-4;
@@ -708,7 +732,56 @@
     font-size: $font-size-lg;
   }
   .games-archive-heading__count span {
-    font-size: 8px;
+    font-size: $font-size-sm;
+  }
+  .games-archive-heading__tools {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .games-view-toggle button {
+    width: 44px;
+    min-height: 44px;
+  }
+  .archive-list {
+    gap: $space-2;
+  }
+  .archive-list-row {
+    grid-template-columns: 68px minmax(0, 1fr) 16px;
+    gap: $space-3;
+    padding: $space-3 $space-2;
+  }
+  .archive-list-row__artwork {
+    width: 68px;
+  }
+  .archive-list-row__heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: $space-1;
+  }
+  .archive-list-row__name {
+    max-width: 100%;
+    font-size: $font-size-sm;
+  }
+  .archive-list-row__completion {
+    width: 100%;
+    justify-content: space-between;
+    gap: $space-2;
+    font-size: $font-size-xs;
+  }
+  .archive-list-row__details {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: $space-2;
+  }
+  .archive-list-row__tiers {
+    gap: $space-3;
+  }
+  .archive-list-row__track {
+    width: 100%;
+  }
+  .archive-list-row__arrow {
+    align-self: start;
+    margin-top: $space-1;
   }
   .games-search {
     width: 100%;
@@ -717,11 +790,12 @@
   .games-filters {
     width: 100%;
     max-width: 100%;
-    gap: $space-4;
+    gap: $space-2;
   }
   .games-filters button {
+    min-height: $button-height-md;
     gap: $space-1;
-    font-size: 10px;
+    font-size: $font-size-sm;
     letter-spacing: 0.04em;
   }
   .games-sort {
@@ -750,17 +824,21 @@
   .archive-game__name {
     font-size: $font-size-sm;
   }
-  .archive-game__progress,
+  .archive-game__progress {
+    font-size: $font-size-xs;
+  }
   .archive-game__progress b {
     font-size: $font-size-xs;
   }
   .archive-game__diamond {
     top: $space-2;
     left: $space-2;
-    font-size: 8px;
+    min-height: 32px;
+    padding-inline: $space-2;
+    font-size: $font-size-xs;
   }
   .archive-game__playtime {
-    font-size: 9px;
+    font-size: $font-size-xs;
   }
   .games-archive-footer {
     align-items: center;
@@ -770,8 +848,8 @@
     padding-block: $space-3;
   }
   .games-pagination__pages button {
-    min-width: 30px;
-    min-height: 32px;
+    min-width: 38px;
+    min-height: 44px;
   }
 }
 

@@ -1,8 +1,8 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ChevronLeft, ChevronRight, Diamond } from "@lucide/vue";
 
-import TrophyCard from "./TrophyCard.vue";
+import VirtualTrophyRail from "./VirtualTrophyRail.vue";
 import { getTrophyTier } from "../../data/trophyTiers.js";
 
 const props = defineProps({
@@ -17,25 +17,69 @@ const props = defineProps({
 const emit = defineEmits(["select", "select-diamond"]);
 
 const rail = ref(null);
+const track = ref(null);
 const activeIndex = ref(0);
+const activeVirtualIndex = ref(0);
+const windowAnchorIndex = ref(0);
 const touchStart = ref(null);
+const virtualStart = ref(0);
+const virtualEnd = ref(Math.min(props.trophies.length, 30));
+const beforeSpacerWidth = ref(0);
+const afterSpacerWidth = ref(0);
+const railWidth = ref(0);
+const railPaddingStart = ref(0);
+const itemGap = ref(0);
+const cardWidth = 142;
 
 const isDiamondLoop = computed(
   () => props.diamonds && props.trophies.length > 2,
 );
 
 const indexedTrophies = computed(() => {
-  const items = props.trophies.map((item, index) => ({
+  const count = props.trophies.length;
+
+  if (isDiamondLoop.value) {
+    return Array.from({ length: 5 }, (_, slot) => {
+      const virtualIndex = windowAnchorIndex.value + slot - 2;
+      const index = ((virtualIndex % count) + count) % count;
+
+      return {
+        item: props.trophies[index],
+        index,
+        virtualIndex,
+      };
+    });
+  }
+
+  return props.trophies.map((item, index) => ({
     item,
     index,
+    virtualIndex: index,
   }));
-
-  return isDiamondLoop.value ? [...items, ...items, ...items] : items;
 });
 
 let dragState = null;
 let scrollFrame = 0;
 let scrollEndTimer = 0;
+let navigationFrame = 0;
+let virtualFrame = 0;
+let resizeObserver;
+let diamondNavigationTarget = null;
+let diamondNavigationRequest = 0;
+let diamondNavigationPending = false;
+let originalScrollBehavior = null;
+
+function cancelNavigationAnimation() {
+  if (navigationFrame) {
+    cancelAnimationFrame(navigationFrame);
+    navigationFrame = 0;
+  }
+
+  if (originalScrollBehavior !== null && rail.value) {
+    rail.value.style.scrollBehavior = originalScrollBehavior;
+    originalScrollBehavior = null;
+  }
+}
 
 function getDisplayCards() {
   return [
@@ -45,9 +89,68 @@ function getDisplayCards() {
   ];
 }
 
+function updateVirtualWindow() {
+  const count = props.trophies.length;
+  const stride = cardWidth + itemGap.value;
+
+  if (!rail.value || !count || stride <= 0) {
+    virtualStart.value = 0;
+    virtualEnd.value = count;
+    beforeSpacerWidth.value = 0;
+    afterSpacerWidth.value = 0;
+    return;
+  }
+
+  const firstVisible = Math.max(
+    0,
+    Math.floor((rail.value.scrollLeft - railPaddingStart.value) / stride),
+  );
+  const visibleEnd = Math.ceil(
+    (rail.value.scrollLeft + railWidth.value - railPaddingStart.value) / stride,
+  ) + 1;
+  const overscan = Math.ceil(railWidth.value / stride);
+  const start = Math.max(0, firstVisible - overscan);
+  const end = Math.min(count, Math.max(start + 1, visibleEnd + overscan));
+
+  const beforeWidth = start ? Math.max(0, start * stride - itemGap.value) : 0;
+  const trailingCount = count - end;
+  const afterWidth = trailingCount
+    ? Math.max(0, trailingCount * stride - itemGap.value)
+    : 0;
+
+  if (start !== virtualStart.value) virtualStart.value = start;
+  if (end !== virtualEnd.value) virtualEnd.value = end;
+  if (beforeWidth !== beforeSpacerWidth.value) beforeSpacerWidth.value = beforeWidth;
+  if (afterWidth !== afterSpacerWidth.value) afterSpacerWidth.value = afterWidth;
+}
+
+function measureVirtualRail() {
+  if (!rail.value || !track.value) return;
+
+  const styles = getComputedStyle(track.value);
+  railWidth.value = rail.value.clientWidth;
+  railPaddingStart.value = Number.parseFloat(styles.paddingInlineStart) || 0;
+  itemGap.value = Number.parseFloat(styles.columnGap) || 0;
+  updateVirtualWindow();
+}
+
+function onVirtualRailScroll() {
+  if (virtualFrame) return;
+  virtualFrame = requestAnimationFrame(() => {
+    virtualFrame = 0;
+    updateVirtualWindow();
+  });
+}
+
 function centerCard(card, behavior = "smooth") {
   if (!rail.value || !card) return;
 
+  if (navigationFrame) {
+    cancelAnimationFrame(navigationFrame);
+    navigationFrame = 0;
+  }
+
+  const node = rail.value;
   const railRect = rail.value.getBoundingClientRect();
   const cardRect = card.getBoundingClientRect();
 
@@ -56,14 +159,51 @@ function centerCard(card, behavior = "smooth") {
     cardRect.width / 2 -
     (railRect.left + rail.value.clientWidth / 2);
 
-  rail.value.scrollTo({
-    left: rail.value.scrollLeft + delta,
-    behavior,
-  });
+  const target = rail.value.scrollLeft + delta;
+
+  if (behavior !== "smooth") {
+    if (originalScrollBehavior === null) {
+      originalScrollBehavior = node.style.scrollBehavior;
+    }
+    node.style.scrollBehavior = "auto";
+    node.scrollLeft = target;
+    node.style.scrollBehavior = originalScrollBehavior;
+    originalScrollBehavior = null;
+    return;
+  }
+
+  if (originalScrollBehavior === null) {
+    originalScrollBehavior = node.style.scrollBehavior;
+  }
+  node.style.scrollBehavior = "auto";
+
+  const start = node.scrollLeft;
+  const distance = target - start;
+  const startedAt = performance.now();
+  const duration = 180;
+
+  const animate = (now) => {
+    const progress = Math.min((now - startedAt) / duration, 1);
+    const easedProgress = 1 - (1 - progress) ** 3;
+
+    if (!rail.value) return;
+    node.scrollLeft = start + distance * easedProgress;
+
+    if (progress < 1) {
+      navigationFrame = requestAnimationFrame(animate);
+    } else {
+      navigationFrame = 0;
+      node.style.scrollBehavior = originalScrollBehavior ?? "";
+      originalScrollBehavior = null;
+    }
+  };
+
+  navigationFrame = requestAnimationFrame(animate);
 }
 
-function syncDiamondSelection() {
+function syncDiamondSelection(recenter = false) {
   if (!props.diamonds) return;
+  if (diamondNavigationPending && !recenter) return;
 
   const cards = getDisplayCards();
 
@@ -93,22 +233,25 @@ function syncDiamondSelection() {
 
   const count = props.trophies.length;
 
-  activeIndex.value = nearestIndex % count;
+  const selectedVirtualIndex = isDiamondLoop.value
+    ? windowAnchorIndex.value + nearestIndex - 2
+    : nearestIndex;
 
-  if (
-    isDiamondLoop.value &&
-    (nearestIndex < count || nearestIndex >= count * 2)
-  ) {
-    const targetIndex = count + activeIndex.value;
+  activeVirtualIndex.value = selectedVirtualIndex;
+  activeIndex.value = ((selectedVirtualIndex % count) + count) % count;
 
-    const sourceRect =
-      cards[nearestIndex].getBoundingClientRect();
+  if (recenter && isDiamondLoop.value && nearestIndex !== 2) {
+    windowAnchorIndex.value = selectedVirtualIndex;
+    requestAnimationFrame(() => {
+      centerCard(getDisplayCards()[2], "auto");
+    });
+  }
 
-    const targetRect =
-      cards[targetIndex].getBoundingClientRect();
-
-    rail.value.scrollLeft +=
-      targetRect.left - sourceRect.left;
+  if (recenter) {
+    diamondNavigationTarget = selectedVirtualIndex;
+    diamondNavigationPending = false;
+  } else if (!diamondNavigationPending) {
+    diamondNavigationTarget = selectedVirtualIndex;
   }
 }
 
@@ -130,24 +273,79 @@ function scrollToIndex(index, behavior = "smooth") {
     return;
   }
 
-  const safeIndex =
-    (index + count) % count;
+  const safeIndex = ((index % count) + count) % count;
 
-  const displayIndex =
-    isDiamondLoop.value
-      ? count + safeIndex
-      : safeIndex;
+  if (!isDiamondLoop.value) {
+    activeVirtualIndex.value = safeIndex;
+    activeIndex.value = safeIndex;
+    centerCard(cards[safeIndex], behavior);
+    return;
+  }
 
-  activeIndex.value = safeIndex;
+  const currentIndex = ((activeVirtualIndex.value % count) + count) % count;
+  let delta = safeIndex - currentIndex;
 
-  centerCard(
-    cards[displayIndex],
-    behavior,
-  );
+  if (delta > count / 2) delta -= count;
+  if (delta < -count / 2) delta += count;
+  if (Math.abs(delta) === count / 2) {
+    delta = Math.sign(index - activeIndex.value) * Math.abs(delta);
+  }
+
+  scrollToVirtualIndex(activeVirtualIndex.value + delta, behavior);
+}
+
+function scrollToVirtualIndex(virtualIndex, behavior = "smooth") {
+  if (isDiamondLoop.value) {
+    cancelNavigationAnimation();
+    diamondNavigationTarget = virtualIndex;
+    diamondNavigationPending = true;
+    windowAnchorIndex.value = virtualIndex;
+    activeVirtualIndex.value = virtualIndex;
+    activeIndex.value =
+      ((virtualIndex % props.trophies.length) + props.trophies.length) %
+      props.trophies.length;
+    const request = ++diamondNavigationRequest;
+
+    nextTick(() => {
+      if (request !== diamondNavigationRequest) return;
+      centerCard(getDisplayCards()[2], behavior);
+    });
+    return;
+  }
+
+  const slot = virtualIndex - windowAnchorIndex.value + 2;
+  const card = getDisplayCards()[slot];
+  if (!card) return;
+
+  activeVirtualIndex.value = virtualIndex;
+  activeIndex.value =
+    ((virtualIndex % props.trophies.length) + props.trophies.length) %
+    props.trophies.length;
+  centerCard(card, behavior);
 }
 
 function scrollByShelf(direction) {
   if (props.diamonds) {
+    if (isDiamondLoop.value) {
+      cancelNavigationAnimation();
+      const target =
+        (diamondNavigationTarget ?? activeVirtualIndex.value) + direction;
+      diamondNavigationTarget = target;
+      diamondNavigationPending = true;
+      windowAnchorIndex.value = target;
+      activeVirtualIndex.value = target;
+      activeIndex.value =
+        ((target % props.trophies.length) + props.trophies.length) %
+        props.trophies.length;
+      const request = ++diamondNavigationRequest;
+
+      nextTick(() => {
+        if (request !== diamondNavigationRequest) return;
+        centerCard(getDisplayCards()[2]);
+      });
+      return;
+    }
+
     scrollToIndex(
       activeIndex.value + direction,
     );
@@ -166,41 +364,61 @@ watch(
   () => props.trophies.length,
   async () => {
     activeIndex.value = 0;
+    activeVirtualIndex.value = 0;
+    windowAnchorIndex.value = 0;
+    diamondNavigationTarget = 0;
+    diamondNavigationPending = false;
 
-    await Promise.resolve();
+    await nextTick();
 
     requestAnimationFrame(() => {
-      if (
-        isDiamondLoop.value &&
-        rail.value
-      ) {
+      if (isDiamondLoop.value && rail.value) {
         const cards = getDisplayCards();
-
-        centerCard(
-          cards[props.trophies.length],
-          "auto",
-        );
+        centerCard(cards[2], "auto");
       } else if (props.diamonds) {
         scrollToIndex(0, "auto");
       }
+      if (!props.diamonds) measureVirtualRail();
     });
   },
+  { immediate: true },
 );
 
+onMounted(() => {
+  if (!props.diamonds) {
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(measureVirtualRail);
+    } else {
+      window.addEventListener("resize", measureVirtualRail);
+    }
+    if (rail.value) resizeObserver?.observe(rail.value);
+    measureVirtualRail();
+  }
+});
+
+watch(rail, (element, previousElement) => {
+  if (props.diamonds) return;
+  if (previousElement) resizeObserver?.unobserve(previousElement);
+  if (element) resizeObserver?.observe(element);
+  nextTick(measureVirtualRail);
+});
+
 function onRailScroll() {
+  if (!props.diamonds) {
+    onVirtualRailScroll();
+    return;
+  }
+
   if (scrollFrame) {
     cancelAnimationFrame(scrollFrame);
   }
 
-  scrollFrame =
-    requestAnimationFrame(
-      syncDiamondSelection,
-    );
+  scrollFrame = requestAnimationFrame(() => syncDiamondSelection());
 
   clearTimeout(scrollEndTimer);
 
   scrollEndTimer = window.setTimeout(
-    syncDiamondSelection,
+    () => syncDiamondSelection(true),
     120,
   );
 }
@@ -256,6 +474,9 @@ function onDragStart(event) {
   ) {
     return;
   }
+
+  cancelAnimationFrame(navigationFrame);
+  navigationFrame = 0;
 
   dragState = {
     pointerId: event.pointerId,
@@ -316,6 +537,15 @@ function onDragEnd(event) {
 
   dragState = null;
 }
+
+onBeforeUnmount(() => {
+  cancelAnimationFrame(scrollFrame);
+  cancelNavigationAnimation();
+  cancelAnimationFrame(virtualFrame);
+  clearTimeout(scrollEndTimer);
+  resizeObserver?.disconnect();
+  window.removeEventListener("resize", measureVirtualRail);
+});
 </script>
 
 <template>
@@ -414,48 +644,34 @@ function onDragEnd(event) {
         @pointerup="onDragEnd"
         @pointercancel="onDragEnd"
       >
-        <div class="trophy-shelf__track">
+        <div ref="track" class="trophy-shelf__track">
           <template v-if="diamonds">
             <button
-              v-for="(
-                { item: game, index: sourceIndex },
-                index
-              ) in indexedTrophies"
-              :key="`${game.appid}-${index}`"
+              v-for="{ item: game, virtualIndex } in indexedTrophies"
+              :key="virtualIndex"
               class="diamond-trophy"
               :class="{
                 'is-selected':
                   isDiamondLoop &&
-                  index % trophies.length ===
-                    activeIndex,
+                  virtualIndex === activeVirtualIndex,
 
                 'is-adjacent':
                   isDiamondLoop &&
-                  Math.abs(
-                    (index % trophies.length) -
-                      activeIndex,
-                  ) === 1,
+                  Math.abs(virtualIndex - activeVirtualIndex) === 1,
               }"
               type="button"
               :aria-label="`View Diamond completion details for ${game.name}`"
               :aria-current="
                 isDiamondLoop &&
-                index % trophies.length ===
-                  activeIndex
+                virtualIndex === activeVirtualIndex
                   ? 'true'
                   : undefined
               "
               @click="
                 !isDiamondLoop ||
-                index % trophies.length ===
-                  activeIndex
-                  ? emit(
-                      'select-diamond',
-                      game,
-                    )
-                  : scrollToIndex(
-                      sourceIndex,
-                    )
+                virtualIndex === activeVirtualIndex
+                  ? emit('select-diamond', game)
+                  : scrollToVirtualIndex(virtualIndex)
               "
             >
               <span
@@ -500,24 +716,20 @@ function onDragEnd(event) {
             </button>
           </template>
 
-          <TrophyCard
+          <VirtualTrophyRail
             v-else
-            v-for="(
-              { item: trophy }, index
-            ) in indexedTrophies"
-            :key="`${trophy.appid}-${trophy.apiname}-${index}`"
-            :trophy="trophy"
-            @select="
-              emit('select', {
-                ...$event,
-                tier:
-                  $event.tier ||
-                  getTrophyTier(
-                    $event.global_percent,
-                  ) ||
-                  'bronze',
-              })
-            "
+            :trophies="trophies"
+            :start="virtualStart"
+            :end="virtualEnd"
+            :before-width="beforeSpacerWidth"
+            :after-width="afterSpacerWidth"
+            @select="emit('select', {
+              ...$event,
+              tier:
+                getTrophyTier($event.global_percent) ||
+                $event.tier ||
+                'bronze',
+            })"
           />
         </div>
       </div>

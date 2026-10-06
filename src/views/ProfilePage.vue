@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { ExternalLink, LoaderCircle, MoveLeft, UserRound } from '@lucide/vue'
+import { Diamond, ExternalLink, LoaderCircle, MoveLeft, Trophy, UserRound } from '@lucide/vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useSteamProfilesStore } from '../stores/steamProfiles.js'
 import TrophyModal from '../components/profile/TrophyModal.vue'
@@ -23,6 +23,17 @@ const profile = computed(() => activeSteamId.value === steamId.value ? steamStor
 const games = computed(() => activeSteamId.value === steamId.value ? steamStore.gamesFor(steamId.value) : [])
 const trophyCollection = computed(() => activeSteamId.value === steamId.value ? steamStore.trophiesFor(steamId.value) : [])
 const gameByAppId = computed(() => new Map(games.value.map((game) => [String(game.appid), game])))
+const profileStats = computed(() => games.value.reduce((stats, game) => {
+  const tiers = game.tierCounts || game.trophyCounts || {}
+  stats.bronze += Number(tiers.bronze) || 0
+  stats.silver += Number(tiers.silver) || 0
+  stats.gold += Number(tiers.gold) || 0
+  stats.completed += game.isDiamond ? 1 : 0
+  return stats
+}, { bronze: 0, silver: 0, gold: 0, completed: 0 }))
+const unlockedTrophyCount = computed(() =>
+  profileStats.value.bronze + profileStats.value.silver + profileStats.value.gold,
+)
 const gamesStatus = computed(() => steamStore.errorFor(steamId.value) && !games.value.length ? 'error' : profile.value ? 'success' : 'loading')
 const syncState = computed(() => steamStore.syncs[steamId.value] || null)
 const collectionStatus = computed(() => {
@@ -70,7 +81,6 @@ async function loadProfile(id) {
     if (steamStore.profileFor(id)) status.value = 'success'
   } catch (error) {
     if (activeSteamId.value !== id) return
-    console.error('Unable to load Steam profile.', error)
     errorCode.value = error.status || 500
     status.value = 'error'
   }
@@ -104,8 +114,6 @@ async function openGame({ game, context }) {
     </RouterLink>
 
     <section class="profile-page__content" aria-labelledby="profile-page-title">
-      <p class="profile-page__eyebrow">{{ $t('profile.eyebrow') }}</p>
-
       <div
         v-if="status === 'loading' && !profile"
         class="profile-page__state"
@@ -138,7 +146,7 @@ async function openGame({ game, context }) {
               v-if="profile.avatarfull || profile.avatarmedium"
               class="profile-page__avatar"
               :src="profile.avatarfull || profile.avatarmedium"
-              :alt="`${profile.personaname}'s avatar`"
+              :alt="$t('profile.avatarAlt', { name: profile.personaname })"
             />
             <UserRound
               v-else
@@ -156,7 +164,7 @@ async function openGame({ game, context }) {
             {{ profile.realname }}
           </p>
           <p class="profile-page__steam-id">
-            STEAMID <span>{{ profile.steamid }}</span>
+            {{ $t('profile.steamId') }} <span>{{ profile.steamid }}</span>
           </p>
           <a
             class="profile-page__steam-link"
@@ -176,8 +184,46 @@ async function openGame({ game, context }) {
           {{ $t('profile.privateCollection') }}
         </div>
         <template v-else>
+          <section class="profile-overview" :aria-label="$t('profile.overview')">
+            <div class="profile-overview__stats">
+              <div class="profile-overview__stat">
+                <strong>{{ games.length.toLocaleString() }}</strong>
+                <span>{{ $t('profile.stats.games') }}</span>
+              </div>
+              <div class="profile-overview__stat">
+                <strong>{{ unlockedTrophyCount.toLocaleString() }}</strong>
+                <span>{{ $t('profile.stats.trophies') }}</span>
+              </div>
+              <div class="profile-overview__stat">
+                <strong>{{ profileStats.completed.toLocaleString() }}</strong>
+                <span>{{ $t('profile.stats.completed') }}</span>
+              </div>
+            </div>
+            <div class="profile-overview__tiers" :aria-label="$t('profile.trophyBreakdown')">
+              <span
+                v-for="tier in ['bronze', 'silver', 'gold']"
+                :key="tier"
+                class="profile-overview__tier trophy-tier"
+                :class="`trophy-tier--${tier}`"
+              >
+                <Trophy :size="16" aria-hidden="true" />
+                <span>{{ $t(`profile.cabinet.${tier}`) }}</span>
+                <strong>{{ profileStats[tier].toLocaleString() }}</strong>
+              </span>
+              <span class="profile-overview__tier trophy-tier trophy-tier--diamond">
+                <Diamond :size="16" fill="currentColor" aria-hidden="true" />
+                <span>{{ $t('profile.cabinet.diamond') }}</span>
+                <strong>{{ profileStats.completed.toLocaleString() }}</strong>
+              </span>
+            </div>
+          </section>
           <div class="collection-shell">
             <ProfileViewTabs v-model="selectedView" />
+            <div v-if="selectedView === 'display'" class="profile-cabinet-heading">
+              <span aria-hidden="true" />
+              <h2>{{ $t('profile.cabinet.title') }}</h2>
+              <span aria-hidden="true" />
+            </div>
             <p v-if="refreshError" class="profile-page__cache-status" role="status">{{ refreshError }}</p>
             <p v-else-if="isHydrating" class="profile-page__cache-status" role="status">
               {{ $t('profile.cacheStatus.loadingCache') }}

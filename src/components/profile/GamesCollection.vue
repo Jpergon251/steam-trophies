@@ -1,10 +1,22 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ChevronLeft, ChevronRight } from '@lucide/vue'
+import { ChevronLeft, ChevronRight, LayoutGrid, List } from '@lucide/vue'
 import GameCard from './GameCard.vue'
+import GameListRow from './GameListRow.vue'
 import GamesToolbar from './GamesToolbar.vue'
 import { useI18n } from '../../i18n'
+
+const GAMES_VIEW_STORAGE_KEY = 'steam-trophies-games-view'
+
+function readGamesViewPreference() {
+  try {
+    return window.localStorage.getItem(GAMES_VIEW_STORAGE_KEY) === 'list' ? 'list' : 'grid'
+  } catch (error) {
+    console.warn('Could not load games view preference:', error)
+    return 'grid'
+  }
+}
 
 const props = defineProps({
   games: { type: Array, default: () => [] },
@@ -19,6 +31,7 @@ const query = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const activeFilter = ref(typeof route.query.filter === 'string' ? route.query.filter : 'all')
 const sortBy = ref(typeof route.query.sort === 'string' ? route.query.sort : 'recent')
 const currentPage = ref(Math.max(1, Number(route.query.page) || 1))
+const gamesView = ref(readGamesViewPreference())
 const pageSize = 24
 
 const filters = computed(() => [
@@ -82,6 +95,16 @@ function changePage(page) {
   document.querySelector('.games-collection')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+function setGamesView(view) {
+  if (view !== 'grid' && view !== 'list') return
+  gamesView.value = view
+  try {
+    window.localStorage.setItem(GAMES_VIEW_STORAGE_KEY, view)
+  } catch (error) {
+    console.warn('Could not save games view preference:', error)
+  }
+}
+
 function openGame(game) {
   emit('select', {
     game,
@@ -103,9 +126,31 @@ function openGame(game) {
         <h2 id="games-collection-title">{{ $t('profile.games.title') }}</h2>
         <p>{{ $t('profile.games.subtitle') }}</p>
       </div>
-      <div class="games-archive-heading__count">
-        <strong>{{ displayCount ?? '—' }}</strong>
-        <span>{{ $t('profile.games.gamesCount') }}</span>
+      <div class="games-archive-heading__tools">
+        <div class="games-archive-heading__count">
+          <strong>{{ displayCount ?? '—' }}</strong>
+          <span>{{ $t('profile.games.gamesCount') }}</span>
+        </div>
+        <div class="games-view-toggle" role="group" :aria-label="$t('profile.games.viewModeAria')">
+          <button
+            type="button"
+            :class="{ 'is-active': gamesView === 'grid' }"
+            :aria-label="$t('profile.games.gridViewAria')"
+            :aria-pressed="gamesView === 'grid'"
+            @click="setGamesView('grid')"
+          >
+            <LayoutGrid :size="18" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            :class="{ 'is-active': gamesView === 'list' }"
+            :aria-label="$t('profile.games.listViewAria')"
+            :aria-pressed="gamesView === 'list'"
+            @click="setGamesView('list')"
+          >
+            <List :size="18" aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </header>
 
@@ -131,8 +176,11 @@ function openGame(game) {
       <small>{{ $t('profile.games.emptyDesc') }}</small>
     </div>
     <template v-else>
-      <div class="archive-grid">
+      <div v-if="gamesView === 'grid'" class="archive-grid">
         <GameCard v-for="game in paginatedGames" :key="game.appid" :game="game" @select="openGame" />
+      </div>
+      <div v-else class="archive-list">
+        <GameListRow v-for="game in paginatedGames" :key="game.appid" :game="game" @select="openGame" />
       </div>
       <footer class="games-archive-footer">
         <span>{{ $t('profile.games.showingRange', { start: rangeStart, end: rangeEnd, total: matchingGames.length.toLocaleString() }) }}</span>

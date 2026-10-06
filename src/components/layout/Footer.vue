@@ -67,7 +67,7 @@ import { Trophy } from "@lucide/vue";
   width: 100%;
   margin-top: auto;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: #050505;
+  background: rgba(5, 5, 5, 0.72);
   color: #a1a1a1;
   font-family: inherit;
 }
@@ -118,7 +118,7 @@ import { Trophy } from "@lucide/vue";
 .app-footer__tagline {
   margin: 0;
   color: #a1a1a1;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -126,7 +126,7 @@ import { Trophy } from "@lucide/vue";
   margin: 0;
   color: #6b6b6b;
   font-family: "JetBrains Mono", monospace;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   letter-spacing: 0.02em;
 }
 
@@ -150,7 +150,7 @@ import { Trophy } from "@lucide/vue";
   align-items: center;
   gap: 0.35rem;
   color: #f5f5f5;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 500;
   text-decoration: none;
   transition:
@@ -171,14 +171,14 @@ import { Trophy } from "@lucide/vue";
 .app-footer__author {
   margin: 0;
   color: #a1a1a1;
-  font-size: 0.78rem;
-  line-height: 1.4;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .app-footer__disclaimer {
   margin: 0.25rem 0 0;
   color: #555555;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   line-height: 1.45;
 }
 

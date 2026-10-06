@@ -2,9 +2,9 @@ export default {
   header: {
     home: 'Inicio de Steam Trophies',
     title: 'Steam Trophies',
-    edition: 'Una nueva forma de coleccionar',
     refresh: 'Recargar',
     refreshAria: 'Recargar datos de Steam',
+    refreshing: 'Actualizando',
     language: 'Idioma',
     languages: {
       en: 'English',
@@ -43,12 +43,19 @@ export default {
   },
   profile: {
     backToDiscovery: 'Volver al buscador',
-    eyebrow: 'Tu colección comienza aquí',
     retrieving: 'Obteniendo perfil de Steam',
     searchAnother: 'Buscar otro perfil',
     steamProfile: 'PERFIL DE STEAM',
+    avatarAlt: 'Avatar de Steam de {name}',
     steamId: 'STEAMID',
     openSteamProfile: 'Abrir perfil de Steam',
+    overview: 'Resumen de la colección del jugador',
+    trophyBreakdown: 'Trofeos desbloqueados por categoría y juegos completados',
+    stats: {
+      games: 'JUEGOS',
+      trophies: 'TROFEOS',
+      completed: '100% COMPLETADOS',
+    },
     privateCollection: 'Esta colección es privada o no está disponible en este momento.',
     cacheStatus: {
       cached: 'Datos en caché · no se puede actualizar ahora',
@@ -67,6 +74,7 @@ export default {
       silver: 'Plata',
       gold: 'Oro',
       diamond: 'Diamante',
+      title: 'Vitrina de trofeos',
       diamondTrophyName: 'Trofeo de Diamante',
       diamondCompleted: '100% completado',
     },
@@ -75,6 +83,12 @@ export default {
       title: 'Tu colección',
       subtitle: 'Explora tu biblioteca completa de juegos',
       gamesCount: 'JUEGOS',
+      viewModeAria: 'Modo de visualización de juegos',
+      gridViewAria: 'Vista de cuadrícula',
+      listViewAria: 'Vista de lista',
+      openGame: 'Ver detalles de {name}',
+      trophies: 'trofeos',
+      noTrophies: 'No hay logros disponibles',
       searchPlaceholder: 'Buscar en tus juegos...',
       searchAria: 'Buscar en tus juegos',
       filterAria: 'Filtrar juegos',
@@ -198,4 +212,3 @@ export default {
     disclaimer: 'Steam y el logotipo de Steam son marcas comerciales de Valve Corporation. Este proyecto no está afiliado a Valve.',
   },
 }
-

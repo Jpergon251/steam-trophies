@@ -1,6 +1,6 @@
 export const TROPHY_TIER_THRESHOLDS = {
-  silver: 30,
-  gold: 10,
+  silver: 40,
+  gold: 15,
 };
 
 export function getTrophyTier(unlockPercentage) {

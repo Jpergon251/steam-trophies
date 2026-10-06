@@ -12,11 +12,14 @@ html {
   background: $color-bg-primary;
   color-scheme: dark;
   scroll-behavior: smooth;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   background: $color-bg-primary;
   color: $color-text-primary;

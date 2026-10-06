@@ -12,7 +12,32 @@ const diamondGame = computed(() => props.trophy?.game || null);
 const gameIsCompleted = computed(() => Boolean(diamondGame.value?.isDiamond));
 const modalRoot = ref(null);
 const closeButton = ref(null);
+const shineKey = ref(0);
+const shineActive = ref(false);
 let previousFocus = null;
+let shineTimer = 0;
+let shineResetTimer = 0;
+
+function clearShineTimers() {
+  window.clearTimeout(shineTimer);
+  window.clearTimeout(shineResetTimer);
+  shineTimer = 0;
+  shineResetTimer = 0;
+}
+
+function scheduleShine() {
+  if (!props.trophy || isDiamond.value || !isUnlocked.value) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  shineTimer = window.setTimeout(() => {
+    shineKey.value += 1;
+    shineActive.value = true;
+    shineResetTimer = window.setTimeout(() => {
+      shineActive.value = false;
+      scheduleShine();
+    }, 750);
+  }, 5000 + Math.random() * 5000);
+}
 
 function handleKey(event) {
   if (event.key === "Escape") emit("close");
@@ -31,17 +56,21 @@ function handleKey(event) {
   }
 }
 watch(() => props.trophy, async (trophy, previousTrophy) => {
+  clearShineTimers();
+  shineActive.value = false;
   if (!trophy) {
     previousFocus?.focus?.();
     previousFocus = null;
     return;
   }
+  scheduleShine();
   if (!previousTrophy) previousFocus = document.activeElement;
   await nextTick();
   closeButton.value?.focus();
 });
 onMounted(() => window.addEventListener("keydown", handleKey));
 onBeforeUnmount(() => {
+  clearShineTimers();
   window.removeEventListener("keydown", handleKey);
   previousFocus?.focus?.();
 });
@@ -62,6 +91,7 @@ onBeforeUnmount(() => {
       class="trophy-modal__card"
       :class="[
         `trophy-modal__card--${tier || 'unclassified'}`,
+        `trophy-tier--${tier || 'unclassified'}`,
         { 'trophy-modal__card--diamond': isDiamond, 'trophy-modal__card--locked': !isUnlocked && !isDiamond, 'trophy-modal__card--diamond-locked': isDiamond && !gameIsCompleted },
       ]"
       :style="isDiamond && diamondGame && (diamondGame.headerUrl || diamondGame.coverUrl) ? { '--modal-artwork': `url('${diamondGame.headerUrl || diamondGame.coverUrl}')` } : undefined"
@@ -104,10 +134,15 @@ onBeforeUnmount(() => {
       </template>
 
       <template v-else>
-        <div class="trophy-modal__piece" :class="[`trophy-modal__piece--${tier || 'unclassified'}`, { 'trophy-modal__piece--locked': !isUnlocked }]">
+        <div class="trophy-modal__piece" :class="[`trophy-modal__piece--${tier || 'unclassified'}`, `trophy-tier--${tier || 'unclassified'}`, { 'trophy-modal__piece--locked': !isUnlocked }]">
           <img v-if="trophy.icon" class="trophy-modal__achievement-image" :src="trophy.icon" :alt="`${trophy.name} achievement icon`" />
           <Trophy v-else class="trophy-modal__trophy-icon" :class="`trophy-modal__trophy-icon--${tier || 'unclassified'}`" :size="150" :stroke-width="1.1" aria-hidden="true" />
-          <span class="trophy-modal__shine" aria-hidden="true" />
+          <span
+            :key="shineKey"
+            class="trophy-modal__shine"
+            :class="{ 'trophy-modal__shine--active': shineActive }"
+            aria-hidden="true"
+          />
         </div>
         <p class="trophy-modal__eyebrow">{{ $t('profile.modal.shelfTier', { tier: $t(`profile.cabinet.${tier || 'unclassified'}`) }) }}</p>
         <h2 id="trophy-modal-title">{{ trophy.name }}</h2>

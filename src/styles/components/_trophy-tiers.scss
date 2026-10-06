@@ -1,0 +1,26 @@
+@use "../abstracts/variables" as *;
+
+.trophy-tier--bronze {
+  --modal-tier: #{$modal-tier-bronze};
+  --modal-tier-glow: #{rgba($trophy-bronze, 0.24)};
+}
+
+.trophy-tier--silver {
+  --modal-tier: #{$modal-tier-silver};
+  --modal-tier-glow: #{rgba($trophy-silver, 0.2)};
+}
+
+.trophy-tier--gold {
+  --modal-tier: #{$modal-tier-gold};
+  --modal-tier-glow: #{rgba($trophy-gold, 0.22)};
+}
+
+.trophy-tier--diamond {
+  --modal-tier: #{$modal-tier-diamond};
+  --modal-tier-glow: #{rgba($trophy-diamond, 0.3)};
+}
+
+.trophy-tier--unclassified {
+  --modal-tier: #{$color-text-secondary};
+  --modal-tier-glow: #{rgba(255, 255, 255, 0.1)};
+}
