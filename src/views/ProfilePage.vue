@@ -34,19 +34,26 @@ const profileStats = computed(() => games.value.reduce((stats, game) => {
 const unlockedTrophyCount = computed(() =>
   profileStats.value.bronze + profileStats.value.silver + profileStats.value.gold,
 )
+const achievementSummariesKnown = computed(() =>
+  games.value.length === 0 || games.value.every((game) =>
+    game.achievementsAvailable === true ||
+    game.achievementsAvailable === false ||
+    Number(game.achievementsUpdatedAt) > 0 ||
+    (Array.isArray(game.achievements) && game.achievements.length > 0),
+  ),
+)
 const gamesStatus = computed(() => steamStore.errorFor(steamId.value) && !games.value.length ? 'error' : profile.value ? 'success' : 'loading')
 const syncState = computed(() => steamStore.syncs[steamId.value] || null)
 const collectionStatus = computed(() => {
   if (!profile.value) return steamStore.isSyncing(steamId.value) ? 'loading' : 'success'
-  return syncState.value?.phase === 'achievements' && !trophyCollection.value.length ? 'loading' : 'success'
+  if (achievementSummariesKnown.value) return 'success'
+  if (steamStore.isSyncing(steamId.value)) return 'loading'
+  return 'error'
 })
+const trophyStatsDisplay = computed(() => achievementSummariesKnown.value ? null : '—')
 const refreshError = computed(() => steamStore.errorFor(steamId.value) && profile.value ? t('profile.cacheStatus.cached') : '')
 const gamesLoading = computed(() => gamesStatus.value === 'loading' || (!games.value.length && collectionStatus.value === 'loading'))
 const activeSteamId = ref(steamId.value)
-const collectionProgress = computed(() => {
-  const sync = steamStore.syncs[steamId.value]
-  return sync && typeof sync === 'object' ? sync : { processed: 0, total: 0 }
-})
 const isHydrating = computed(() => steamStore.isHydrating(steamId.value))
 
 const errorMessage = computed(() => {
@@ -202,11 +209,11 @@ async function loadVisibleAchievementIcons(appId) {
                 <span>{{ $t('profile.stats.games') }}</span>
               </div>
               <div class="profile-overview__stat">
-                <strong>{{ unlockedTrophyCount.toLocaleString() }}</strong>
+                <strong>{{ trophyStatsDisplay ?? unlockedTrophyCount.toLocaleString() }}</strong>
                 <span>{{ $t('profile.stats.trophies') }}</span>
               </div>
               <div class="profile-overview__stat">
-                <strong>{{ profileStats.completed.toLocaleString() }}</strong>
+                <strong>{{ trophyStatsDisplay ?? profileStats.completed.toLocaleString() }}</strong>
                 <span>{{ $t('profile.stats.completed') }}</span>
               </div>
             </div>
@@ -219,12 +226,12 @@ async function loadVisibleAchievementIcons(appId) {
               >
                 <Trophy :size="16" aria-hidden="true" />
                 <span>{{ $t(`profile.cabinet.${tier}`) }}</span>
-                <strong>{{ profileStats[tier].toLocaleString() }}</strong>
+                <strong>{{ trophyStatsDisplay ?? profileStats[tier].toLocaleString() }}</strong>
               </span>
               <span class="profile-overview__tier trophy-tier trophy-tier--diamond">
                 <Diamond :size="16" fill="currentColor" aria-hidden="true" />
                 <span>{{ $t('profile.cabinet.diamond') }}</span>
-                <strong>{{ profileStats.completed.toLocaleString() }}</strong>
+                <strong>{{ trophyStatsDisplay ?? profileStats.completed.toLocaleString() }}</strong>
               </span>
             </div>
           </section>
@@ -242,15 +249,11 @@ async function loadVisibleAchievementIcons(appId) {
             <p v-else-if="syncState?.active && syncState.phase === 'library'" class="profile-page__cache-status" role="status">
               {{ $t('profile.cacheStatus.updating') }}
             </p>
-            <p v-else-if="syncState?.active && syncState.total" class="profile-page__cache-status" role="status">
-              {{ $t('profile.cacheStatus.updatingProgress', { processed: syncState.processed, total: syncState.total }) }}
-            </p>
             <TrophyCabinet
               v-if="selectedView === 'display'"
               :trophies="trophyCollection"
               :games="games"
               :status="collectionStatus"
-              :progress="collectionProgress"
               @select-trophy="selectedTrophy = { ...$event, game: gameByAppId.get(String($event.appid)) || null }"
               @select-diamond="selectedTrophy = { isDiamond: true, game: $event, name: $event.name }"
               @request-achievement-icons="loadVisibleAchievementIcons"

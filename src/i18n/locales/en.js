@@ -61,14 +61,13 @@ export default {
       cached: 'Cached data · unable to refresh right now',
       loadingCache: 'Loading cached collection…',
       updating: 'Updating…',
-      updatingProgress: 'Updating collection · {processed} / {total}',
     },
     tabs: {
       display: 'Display',
       games: 'Games',
     },
     cabinet: {
-      loading: 'Cataloguing your collection · {processed} / {total} games',
+      loading: 'Loading trophy summary…',
       error: 'Some trophy data could not be loaded.',
       bronze: 'Bronze',
       silver: 'Silver',

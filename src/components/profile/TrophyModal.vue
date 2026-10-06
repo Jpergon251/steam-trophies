@@ -14,16 +14,17 @@ const modalRoot = ref(null);
 const closeButton = ref(null);
 const shineKey = ref(0);
 const shineActive = ref(false);
-const iconFailed = ref(false);
+const achievementIcons = computed(() => [...new Set([props.trophy?.icon, props.trophy?.icongray].filter(Boolean))]);
+const achievementIconIndex = ref(0);
 let previousFocus = null;
 let shineTimer = 0;
-let shineResetTimer = 0;
+let shineEndTimer = 0;
 
 function clearShineTimers() {
   window.clearTimeout(shineTimer);
-  window.clearTimeout(shineResetTimer);
+  window.clearTimeout(shineEndTimer);
   shineTimer = 0;
-  shineResetTimer = 0;
+  shineEndTimer = 0;
 }
 
 function scheduleShine() {
@@ -33,11 +34,16 @@ function scheduleShine() {
   shineTimer = window.setTimeout(() => {
     shineKey.value += 1;
     shineActive.value = true;
-    shineResetTimer = window.setTimeout(() => {
-      shineActive.value = false;
-      scheduleShine();
-    }, 750);
+    shineEndTimer = window.setTimeout(finishShine, 2600);
   }, 5000 + Math.random() * 5000);
+}
+
+function finishShine() {
+  window.clearTimeout(shineEndTimer);
+  shineEndTimer = 0;
+  if (!shineActive.value) return;
+  shineActive.value = false;
+  scheduleShine();
 }
 
 function handleKey(event) {
@@ -59,7 +65,7 @@ function handleKey(event) {
 watch(() => props.trophy, async (trophy, previousTrophy) => {
   clearShineTimers();
   shineActive.value = false;
-  iconFailed.value = false;
+  achievementIconIndex.value = 0;
   if (!trophy) {
     previousFocus?.focus?.();
     previousFocus = null;
@@ -137,29 +143,36 @@ onBeforeUnmount(() => {
 
       <template v-else>
         <div class="trophy-modal__piece" :class="[`trophy-modal__piece--${tier || 'unclassified'}`, `trophy-tier--${tier || 'unclassified'}`, { 'trophy-modal__piece--locked': !isUnlocked }]">
+          <img
+            v-if="achievementIcons[achievementIconIndex]"
+            class="trophy-modal__achievement-icon"
+            :src="achievementIcons[achievementIconIndex]"
+            :alt="`${trophy.name} achievement icon`"
+            @error="achievementIconIndex < achievementIcons.length - 1
+              ? achievementIconIndex += 1
+              : achievementIconIndex = achievementIcons.length"
+          />
           <Trophy
-            class="trophy-modal__trophy-icon"
-            :class="`trophy-modal__trophy-icon--${tier || 'unclassified'}`"
-            :size="150"
+            v-else
+            class="trophy-modal__trophy-fallback"
+            :size="88"
             :stroke-width="1.1"
             aria-hidden="true"
           />
-          <span
-            :key="shineKey"
-            class="trophy-modal__shine"
-            :class="{ 'trophy-modal__shine--active': shineActive }"
-            aria-hidden="true"
-          />
+          <span class="trophy-modal__tier-badge" aria-hidden="true">
+            <Trophy :size="34" :stroke-width="1.8" />
+          </span>
+          <span class="trophy-modal__shine-clip" aria-hidden="true">
+            <span
+              :key="shineKey"
+              class="trophy-modal__shine"
+              :class="{ 'trophy-modal__shine--active': shineActive }"
+              @animationend="finishShine"
+            />
+          </span>
         </div>
         <p class="trophy-modal__eyebrow">{{ $t('profile.modal.shelfTier', { tier: $t(`profile.cabinet.${tier || 'unclassified'}`) }) }}</p>
         <div class="trophy-modal__achievement-title">
-          <img
-            v-if="trophy.icon && !iconFailed"
-            class="trophy-modal__achievement-image"
-            :src="trophy.icon"
-            :alt="`${trophy.name} achievement icon`"
-            @error="iconFailed = true"
-          />
           <h2 id="trophy-modal-title">{{ trophy.name }}</h2>
         </div>
         <div class="trophy-modal__game">

@@ -96,22 +96,6 @@
     }
   }
 
-  &__trophy-icon {
-    margin-bottom: $space-2;
-    filter: drop-shadow(0 0 10px currentColor);
-  }
-  &__trophy-icon--bronze {
-    color: $trophy-bronze;
-  }
-  &__trophy-icon--silver {
-    color: $trophy-silver;
-  }
-  &__trophy-icon--gold {
-    color: $trophy-gold;
-  }
-  &__trophy-icon--unclassified {
-    color: $color-text-tertiary;
-  }
   &__tier {
     color: $color-text-secondary;
     font-size: $font-size-xs;
@@ -317,7 +301,13 @@
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-top: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: $modal-radius;
-  background: radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.045), transparent 54%), linear-gradient(160deg, #101113, $color-bg-modal 68%);
+  background:
+    radial-gradient(
+      ellipse at 50% 0%,
+      rgba(255, 255, 255, 0.045),
+      transparent 54%
+    ),
+    linear-gradient(160deg, #101113, $color-bg-modal 68%);
   box-shadow: $modal-shadow;
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
@@ -326,60 +316,249 @@
   height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.035);
-  transition: transform $transition-normal, background $transition-normal, color $transition-normal, border-color $transition-normal;
+  transition:
+    transform $transition-normal,
+    background $transition-normal,
+    color $transition-normal,
+    border-color $transition-normal;
 }
-.trophy-modal__close:hover { transform: rotate(4deg); border-color: rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.09); }
+.trophy-modal__close:hover {
+  transform: rotate(4deg);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.09);
+}
 .trophy-modal__piece {
   position: relative;
   display: grid;
-  width: clamp(128px, 24vw, 174px);
+  width: 112px;
   aspect-ratio: 1;
   place-items: center;
-  overflow: hidden;
+  overflow: visible;
   margin: 0 auto $space-6;
   border: 1px solid color-mix(in srgb, var(--modal-tier) 25%, transparent);
   border-radius: 50%;
-  background: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.13), color-mix(in srgb, var(--modal-tier) 9%, transparent) 40%, rgba(0, 0, 0, 0.34) 75%);
-  box-shadow: inset 0 1px 10px rgba(255, 255, 255, 0.07), 0 0 35px var(--modal-tier-glow);
+  background: radial-gradient(
+    circle at 34% 28%,
+    rgba(255, 255, 255, 0.13),
+    color-mix(in srgb, var(--modal-tier) 9%, transparent) 40%,
+    rgba(0, 0, 0, 0.34) 75%
+  );
+  box-shadow:
+    inset 0 1px 10px rgba(255, 255, 255, 0.07),
+    0 0 35px var(--modal-tier-glow);
 }
-.trophy-modal__piece::before { position: absolute; inset: 7px; border: 1px solid rgba(255, 255, 255, 0.065); border-radius: inherit; content: ""; }
-.trophy-modal__piece--locked { border-color: rgba(255, 255, 255, 0.12); background: radial-gradient(circle, rgba(255, 255, 255, 0.035), rgba(0, 0, 0, 0.38) 74%); box-shadow: inset 0 1px 8px rgba(255, 255, 255, 0.04); }
-.trophy-modal__trophy-icon { width: 72%; height: 72%; color: var(--modal-tier); filter: drop-shadow(0 0 11px var(--modal-tier-glow)); }
-.trophy-modal__piece--locked .trophy-modal__trophy-icon { color: $color-text-secondary; filter: grayscale(1); opacity: 0.72; }
-.trophy-modal__achievement-title { display: flex; min-width: 0; align-items: center; justify-content: center; gap: $space-3; margin: $space-2 0 $space-3; }
-.trophy-modal__achievement-title h2 { min-width: 0; margin: 0; text-align: left; }
-.trophy-modal__achievement-image { width: 38px; height: 38px; flex: 0 0 38px; border: 1px solid color-mix(in srgb, var(--modal-tier) 35%, transparent); border-radius: $radius-xs; object-fit: cover; filter: drop-shadow(0 0 10px var(--modal-tier-glow)); }
-.trophy-modal__shine { position: absolute; inset: -45% auto -45% -50%; width: 36%; transform: rotate(35deg) translateX(-280%); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.43), transparent); filter: blur(6px); pointer-events: none; }
-.trophy-modal__piece:not(.trophy-modal__piece--locked) .trophy-modal__shine { animation: trophy-shine 1200ms $ease-expressive 200ms both; }
-.trophy-modal__shine--active { animation: trophy-shine 1200ms $ease-expressive both; }
-.trophy-modal__eyebrow { margin: 0 0 $space-2 !important; color: var(--modal-tier) !important; font-size: $font-size-sm; font-weight: $font-weight-medium; letter-spacing: $letter-spacing-uppercase; text-transform: uppercase; }
-.trophy-modal__card h2 { margin: $space-2 0 $space-3; font-size: clamp($font-size-xl, 4vw, $font-size-2xl); letter-spacing: -0.035em; line-height: 1.2; overflow-wrap: anywhere; }
-.trophy-modal__game { min-height: 30px; color: $color-text-tertiary; }
-.trophy-modal__game img { width: 24px; height: 24px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: $radius-xs; object-fit: cover; }
-.trophy-modal__game strong { color: $color-text-secondary; font-size: $font-size-sm; font-weight: $font-weight-medium; }
-.trophy-modal__description { max-width: 42ch; margin: $space-4 auto !important; color: $color-text-secondary; font-size: $font-size-md; line-height: $line-height-relaxed; }
+.trophy-modal__piece::before {
+  position: absolute;
+  inset: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+}
+.trophy-modal__piece--locked {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.035),
+    rgba(0, 0, 0, 0.38) 74%
+  );
+  box-shadow: inset 0 1px 8px rgba(255, 255, 255, 0.04);
+}
+.trophy-modal__achievement-icon {
+  position: relative;
+  z-index: 1;
+  width: 100px;
+  height: 100px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  object-fit: cover;
+  filter: drop-shadow(0 12px 23px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 13px var(--modal-tier-glow));
+}
+.trophy-modal__piece--locked .trophy-modal__achievement-icon {
+  filter: grayscale(1) brightness(0.64)
+    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.36));
+  opacity: 0.78;
+}
+.trophy-modal__trophy-fallback {
+  position: relative;
+  z-index: 1;
+  color: var(--modal-tier);
+  filter: drop-shadow(0 0 11px var(--modal-tier-glow));
+}
+.trophy-modal__piece--locked .trophy-modal__trophy-fallback {
+  color: $color-text-secondary;
+  filter: grayscale(1);
+  opacity: 0.72;
+}
+.trophy-modal__tier-badge {
+  position: absolute;
+  z-index: 3;
+  top: -7px;
+  right: -19px;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--modal-tier) 45%, transparent);
+  border-radius: 50%;
+  background: $color-bg-primary;
+  color: var(--modal-tier);
+  filter: drop-shadow(0 0 8px var(--modal-tier-glow));
+}
+.trophy-modal__shine-clip {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.trophy-modal__shine {
+  position: absolute;
+  top: -45%;
+  left: -50%;
+  width: 36%;
+  height: 190%;
+  transform: rotate(35deg) translateX(-500%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.43),
+    transparent
+  );
+  filter: blur(6px);
+  opacity: 0;
+}
+.trophy-modal__shine--active {
+  animation: trophy-shine 2300ms $ease-expressive;
+}
+.trophy-modal__achievement-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: $space-3;
+  margin: $space-2 0 $space-3;
+}
+.trophy-modal__achievement-title h2 {
+  min-width: 0;
+  margin: 0;
+  text-align: center;
+}
+.trophy-modal__eyebrow {
+  margin: 0 0 $space-2 !important;
+  color: var(--modal-tier) !important;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  letter-spacing: $letter-spacing-uppercase;
+  text-transform: uppercase;
+}
+.trophy-modal__card h2 {
+  margin: $space-2 0 $space-3;
+  font-size: clamp($font-size-xl, 4vw, $font-size-2xl);
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.trophy-modal__game {
+  min-height: 30px;
+  color: $color-text-tertiary;
+}
+.trophy-modal__game img {
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: $radius-xs;
+  object-fit: cover;
+}
+.trophy-modal__game strong {
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+}
+.trophy-modal__description {
+  max-width: 42ch;
+  margin: $space-4 auto !important;
+  color: $color-text-secondary;
+  font-size: $font-size-md;
+  line-height: $line-height-relaxed;
+}
 .trophy-modal__unlocked-state,
-.trophy-modal__locked-state { display: inline-flex; align-items: center; justify-content: center; gap: $space-2; margin: $space-2 0 0 !important; font-size: $font-size-sm; }
-.trophy-modal__unlocked-state { color: var(--modal-tier) !important; }
-.trophy-modal__locked-state { color: $color-text-secondary !important; }
-.trophy-modal__card dl { flex-wrap: wrap; gap: $space-5 $space-10; margin-top: $space-5; padding-top: $space-4; border-top: 1px solid rgba(255, 255, 255, 0.08); }
-.trophy-modal__card dl > div { min-width: 90px; }
-.trophy-modal__card dt { color: $color-text-secondary; font-size: $font-size-xs; letter-spacing: 0.08em; }
-.trophy-modal__card dd { color: $color-text-secondary; font-size: $font-size-sm; }
+.trophy-modal__locked-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-2;
+  margin: $space-2 0 0 !important;
+  font-size: $font-size-sm;
+}
+.trophy-modal__unlocked-state {
+  color: var(--modal-tier) !important;
+}
+.trophy-modal__locked-state {
+  color: $color-text-secondary !important;
+}
+.trophy-modal__card dl {
+  flex-wrap: wrap;
+  gap: $space-5 $space-10;
+  margin-top: $space-5;
+  padding-top: $space-4;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.trophy-modal__card dl > div {
+  min-width: 90px;
+}
+.trophy-modal__card dt {
+  color: $color-text-secondary;
+  font-size: $font-size-xs;
+  letter-spacing: 0.08em;
+}
+.trophy-modal__card dd {
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+}
 
 .trophy-modal-enter-active,
-.trophy-modal-leave-active { transition: opacity $modal-duration $modal-easing; }
+.trophy-modal-leave-active {
+  transition: opacity $modal-duration $modal-easing;
+}
 .trophy-modal-enter-active .trophy-modal__card,
-.trophy-modal-leave-active .trophy-modal__card { transition: opacity $modal-duration $modal-easing, transform $modal-duration $modal-easing; }
+.trophy-modal-leave-active .trophy-modal__card {
+  transition:
+    opacity $modal-duration $modal-easing,
+    transform $modal-duration $modal-easing;
+}
 .trophy-modal-enter-from,
-.trophy-modal-leave-to { opacity: 0; }
+.trophy-modal-leave-to {
+  opacity: 0;
+}
 .trophy-modal-enter-from .trophy-modal__card,
-.trophy-modal-leave-to .trophy-modal__card { transform: translateY(8px) scale(0.96); opacity: 0; }
+.trophy-modal-leave-to .trophy-modal__card {
+  transform: translateY(8px) scale(0.96);
+  opacity: 0;
+}
 .trophy-modal-enter-active .trophy-modal__card > :not(.trophy-modal__close),
-.trophy-modal-leave-active .trophy-modal__card > :not(.trophy-modal__close) { transition: opacity 220ms ease 100ms; }
+.trophy-modal-leave-active .trophy-modal__card > :not(.trophy-modal__close) {
+  transition: opacity 220ms ease 100ms;
+}
 .trophy-modal-enter-from .trophy-modal__card > :not(.trophy-modal__close),
-.trophy-modal-leave-to .trophy-modal__card > :not(.trophy-modal__close) { opacity: 0; }
-@keyframes trophy-shine { to { transform: rotate(35deg) translateX(580%); } }
+.trophy-modal-leave-to .trophy-modal__card > :not(.trophy-modal__close) {
+  opacity: 0;
+}
+@keyframes trophy-shine {
+  0% {
+    transform: rotate(35deg) translateX(-500%);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.62;
+  }
+  100% {
+    transform: rotate(35deg) translateX(900%);
+    opacity: 0;
+  }
+}
 
 .trophy-modal__card--diamond {
   width: min(100%, 660px);
@@ -387,51 +566,383 @@
   justify-content: center;
   padding: clamp($space-8, 7vw, $space-12);
   border-color: rgba($trophy-diamond-light, 0.22);
-  background: radial-gradient(ellipse at 50% 40%, rgba($trophy-diamond, 0.085), transparent 53%), linear-gradient(160deg, rgba(13, 17, 20, 0.97), rgba(3, 4, 5, 0.99) 75%);
-  box-shadow: $modal-shadow, inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 45px rgba($trophy-diamond, 0.08);
+  background:
+    radial-gradient(
+      ellipse at 50% 40%,
+      rgba($trophy-diamond, 0.085),
+      transparent 53%
+    ),
+    linear-gradient(160deg, rgba(13, 17, 20, 0.97), rgba(3, 4, 5, 0.99) 75%);
+  box-shadow:
+    $modal-shadow,
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 45px rgba($trophy-diamond, 0.08);
 }
-.trophy-modal__card--diamond::before { position: absolute; z-index: 0; inset: -3%; border-radius: inherit; background: var(--modal-artwork) center / cover no-repeat; content: ""; opacity: 0.76; filter: saturate(1.2) brightness(0.72); -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, #000 28%, rgba(0, 0, 0, 0.78) 52%, rgba(0, 0, 0, 0.32) 72%, transparent 94%); mask-image: radial-gradient(ellipse at center, #000 0%, #000 28%, rgba(0, 0, 0, 0.78) 52%, rgba(0, 0, 0, 0.32) 72%, transparent 94%); pointer-events: none; }
-.trophy-modal__card--diamond::after { position: absolute; z-index: 0; inset: 0; border-radius: inherit; background: radial-gradient(ellipse at center, rgba(2, 5, 8, 0.18) 0%, rgba(2, 5, 8, 0.38) 56%, rgba(2, 5, 8, 0.76) 100%); content: ""; pointer-events: none; }
-.trophy-modal__card--diamond > * { position: relative; z-index: 1; }
-.trophy-modal__card--diamond > .trophy-modal__close { position: absolute; z-index: 4; }
-.diamond-exhibit__halo { position: absolute; z-index: 0; top: 2%; left: 50%; width: min(430px, 76vw); aspect-ratio: 1; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(circle, rgba($trophy-diamond, 0.16), rgba($trophy-diamond, 0.045) 38%, transparent 70%); filter: blur(13px); pointer-events: none; }
-.diamond-exhibit__orbit { position: absolute; top: 50%; left: 50%; border: 1px solid rgba($trophy-diamond-light, 0.12); border-radius: 50%; transform: translate(-50%, -50%) rotate(-22deg); }
-.diamond-exhibit__orbit--one { width: 340px; height: 116px; }
-.diamond-exhibit__orbit--two { width: 300px; height: 96px; transform: translate(-50%, -50%) rotate(34deg); border-color: rgba($trophy-diamond, 0.08); }
-.diamond-exhibit__gem { position: relative; z-index: 1; display: grid; width: clamp(178px, 31vw, 246px); aspect-ratio: 1; place-items: center; margin: 0 auto $space-4; color: #f5fcff; filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 30px rgba($trophy-diamond, 0.38)); animation: diamond-arrive 760ms $ease-expressive 160ms both; }
-.trophy-modal__card--diamond-locked .diamond-exhibit__gem { animation-name: diamond-arrive-locked; }
-@keyframes diamond-arrive-locked { from { transform: translateY(8px) scale(0.92); opacity: 0.35; } to { transform: translateY(0) scale(1); opacity: 0.8; } }
-.diamond-exhibit__gem::before { position: absolute; inset: 15%; border-radius: 50%; background: radial-gradient(circle, rgba($trophy-diamond, 0.19), transparent 68%); content: ""; filter: blur(10px); }
-.diamond-exhibit__ambient { position: absolute; z-index: 1; inset: -8%; background: var(--modal-gem-artwork) center / cover no-repeat; opacity: 0.72; filter: blur(8px) saturate(1.2) brightness(0.68); -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, rgba(0, 0, 0, 0.72) 42%, transparent 78%); mask-image: radial-gradient(ellipse at center, #000 0%, rgba(0, 0, 0, 0.72) 42%, transparent 78%); pointer-events: none; }
-.diamond-exhibit__ambient::after { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(3, 7, 10, 0.18), rgba(3, 7, 10, 0.62)); content: ""; }
-.diamond-exhibit__gem-icon { position: relative; z-index: 2; width: 78%; height: 78%; fill: rgba($trophy-diamond-light, 0.14); stroke: currentColor; filter: drop-shadow(0 0 10px rgba($trophy-diamond, 0.72)) drop-shadow(0 0 25px rgba($trophy-diamond-light, 0.36)); }
-.diamond-exhibit__facet { position: absolute; z-index: 3; inset: 11% 29%; clip-path: polygon(0 0, 100% 0, 72% 100%, 50% 68%, 28% 100%); background: linear-gradient(140deg, rgba(255, 255, 255, 0.36), rgba($trophy-diamond, 0.08) 56%, transparent 85%); opacity: 0.58; mix-blend-mode: screen; }
-.diamond-exhibit__gem::after { position: absolute; z-index: 3; inset: 0; background: linear-gradient(128deg, transparent 38%, rgba(255, 255, 255, 0.68) 49%, transparent 59%); clip-path: polygon(50% 5%, 91% 34%, 75% 83%, 50% 98%, 25% 83%, 9% 34%); opacity: 0; animation: diamond-shine 680ms $ease-expressive 580ms both; content: ""; }
-.diamond-exhibit__gem--locked { color: #8d9da5; filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.58)) drop-shadow(0 0 16px rgba($trophy-diamond, 0.12)); }
-.diamond-exhibit__gem--locked .diamond-exhibit__gem-icon { fill: rgba(160, 177, 184, 0.055); filter: grayscale(0.7); opacity: 0.7; }
-.diamond-exhibit__gem--locked::after { display: none; }
-.diamond-exhibit__gem-lock { position: absolute; z-index: 4; top: 48%; left: 50%; transform: translate(-50%, -50%); color: rgba(235, 245, 248, 0.82); filter: drop-shadow(0 2px 5px #000); }
-.diamond-exhibit__eyebrow { position: relative; z-index: 2; margin: 0 0 $space-2; color: $trophy-diamond-light; font-size: $font-size-sm; letter-spacing: 0.16em; text-transform: uppercase; animation: diamond-copy-in 380ms ease 630ms both; }
-.diamond-exhibit__earned-date { position: relative; z-index: 2; margin: 0 0 $space-2; color: $color-text-secondary; font-size: $font-size-sm; animation: diamond-copy-in 380ms ease 650ms both; }
-.diamond-exhibit__locked-label { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: $space-2; margin: 0 0 $space-1; color: $color-text-secondary; font-size: $font-size-sm; }
-.trophy-modal__card--diamond h2 { position: relative; z-index: 2; max-width: 100%; margin: $space-2 0 $space-4; font-size: clamp($font-size-2xl, 5vw, $font-size-4xl); letter-spacing: -0.045em; line-height: 1.12; animation: diamond-copy-in 420ms ease 680ms both; }
-.diamond-exhibit__reward { position: relative; z-index: 2; display: flex; align-items: center; gap: $space-4; padding: $space-3 $space-5; border: 1px solid rgba($trophy-diamond-light, 0.19); border-radius: $radius-pill; background: rgba(4, 9, 12, 0.58); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05); animation: diamond-copy-in 420ms ease 740ms both; }
-.diamond-exhibit__reward span { color: $trophy-diamond-light; font-size: $font-size-sm; font-weight: $font-weight-semibold; letter-spacing: 0.14em; }
-.diamond-exhibit__reward small { color: rgba(226, 243, 248, 0.9); font-size: $font-size-sm; letter-spacing: 0.08em; }
-.diamond-exhibit__completion { position: relative; z-index: 2; display: flex; align-items: baseline; gap: $space-2; margin-top: $space-5; color: $color-text-secondary; animation: diamond-copy-in 420ms ease 800ms both; }
-.diamond-exhibit__completion strong { color: #fff; font-family: $font-mono; font-size: $font-size-xl; font-weight: $font-weight-light; }
-.diamond-exhibit__completion span { font-size: $font-size-sm; }
-.diamond-exhibit__description { position: relative; z-index: 2; max-width: 42ch; margin: $space-4 0 0 !important; color: $color-text-secondary; font-size: $font-size-sm; line-height: $line-height-relaxed; animation: diamond-copy-in 420ms ease 840ms both; }
-.trophy-modal__card--diamond-locked .diamond-exhibit__eyebrow { color: $color-text-secondary; }
-.trophy-modal__card--diamond-locked .diamond-exhibit__reward { border-color: rgba(255, 255, 255, 0.1); }
-.trophy-modal__card--diamond-locked .diamond-exhibit__reward span { color: $color-text-secondary; }
-.trophy-modal__card--diamond-locked .diamond-exhibit__gem { animation-name: diamond-arrive-locked; }
-@keyframes diamond-arrive-locked { from { transform: translateY(8px) scale(0.92); opacity: 0.35; } to { transform: translateY(0) scale(1); opacity: 0.8; } }
-@keyframes diamond-arrive { from { transform: translateY(9px) scale(0.88); opacity: 0.35; } to { transform: translateY(0) scale(1); opacity: 1; } }
-@keyframes diamond-shine { 0% { opacity: 0; transform: translateX(-55%); } 20% { opacity: 0.8; } 100% { opacity: 0; transform: translateX(55%); } }
-@keyframes diamond-copy-in { from { transform: translateY(6px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.trophy-modal__card--diamond::before {
+  position: absolute;
+  z-index: 0;
+  inset: -3%;
+  border-radius: inherit;
+  background: var(--modal-artwork) center / cover no-repeat;
+  content: "";
+  opacity: 0.76;
+  filter: saturate(1.2) brightness(0.72);
+  -webkit-mask-image: radial-gradient(
+    ellipse at center,
+    #000 0%,
+    #000 28%,
+    rgba(0, 0, 0, 0.78) 52%,
+    rgba(0, 0, 0, 0.32) 72%,
+    transparent 94%
+  );
+  mask-image: radial-gradient(
+    ellipse at center,
+    #000 0%,
+    #000 28%,
+    rgba(0, 0, 0, 0.78) 52%,
+    rgba(0, 0, 0, 0.32) 72%,
+    transparent 94%
+  );
+  pointer-events: none;
+}
+.trophy-modal__card--diamond::after {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(2, 5, 8, 0.18) 0%,
+    rgba(2, 5, 8, 0.38) 56%,
+    rgba(2, 5, 8, 0.76) 100%
+  );
+  content: "";
+  pointer-events: none;
+}
+.trophy-modal__card--diamond > * {
+  position: relative;
+  z-index: 1;
+}
+.trophy-modal__card--diamond > .trophy-modal__close {
+  position: absolute;
+  z-index: 4;
+}
+.diamond-exhibit__halo {
+  position: absolute;
+  z-index: 0;
+  top: 2%;
+  left: 50%;
+  width: min(430px, 76vw);
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba($trophy-diamond, 0.16),
+    rgba($trophy-diamond, 0.045) 38%,
+    transparent 70%
+  );
+  filter: blur(13px);
+  pointer-events: none;
+}
+.diamond-exhibit__orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 1px solid rgba($trophy-diamond-light, 0.12);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) rotate(-22deg);
+}
+.diamond-exhibit__orbit--one {
+  width: 340px;
+  height: 116px;
+}
+.diamond-exhibit__orbit--two {
+  width: 300px;
+  height: 96px;
+  transform: translate(-50%, -50%) rotate(34deg);
+  border-color: rgba($trophy-diamond, 0.08);
+}
+.diamond-exhibit__gem {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: clamp(178px, 31vw, 246px);
+  aspect-ratio: 1;
+  place-items: center;
+  margin: 0 auto $space-4;
+  color: #f5fcff;
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 30px rgba($trophy-diamond, 0.38));
+  animation: diamond-arrive 760ms $ease-expressive 160ms both;
+}
+.trophy-modal__card--diamond-locked .diamond-exhibit__gem {
+  animation-name: diamond-arrive-locked;
+}
+@keyframes diamond-arrive-locked {
+  from {
+    transform: translateY(8px) scale(0.92);
+    opacity: 0.35;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 0.8;
+  }
+}
+.diamond-exhibit__gem::before {
+  position: absolute;
+  inset: 15%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba($trophy-diamond, 0.19),
+    transparent 68%
+  );
+  content: "";
+  filter: blur(10px);
+}
+.diamond-exhibit__ambient {
+  position: absolute;
+  z-index: 1;
+  inset: -8%;
+  background: var(--modal-gem-artwork) center / cover no-repeat;
+  opacity: 0.72;
+  filter: blur(8px) saturate(1.2) brightness(0.68);
+  -webkit-mask-image: radial-gradient(
+    ellipse at center,
+    #000 0%,
+    rgba(0, 0, 0, 0.72) 42%,
+    transparent 78%
+  );
+  mask-image: radial-gradient(
+    ellipse at center,
+    #000 0%,
+    rgba(0, 0, 0, 0.72) 42%,
+    transparent 78%
+  );
+  pointer-events: none;
+}
+.diamond-exhibit__ambient::after {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(3, 7, 10, 0.18),
+    rgba(3, 7, 10, 0.62)
+  );
+  content: "";
+}
+.diamond-exhibit__gem-icon {
+  position: relative;
+  z-index: 2;
+  width: 78%;
+  height: 78%;
+  fill: rgba($trophy-diamond-light, 0.14);
+  stroke: currentColor;
+  filter: drop-shadow(0 0 10px rgba($trophy-diamond, 0.72))
+    drop-shadow(0 0 25px rgba($trophy-diamond-light, 0.36));
+}
+.diamond-exhibit__facet {
+  position: absolute;
+  z-index: 3;
+  inset: 11% 29%;
+  clip-path: polygon(0 0, 100% 0, 72% 100%, 50% 68%, 28% 100%);
+  background: linear-gradient(
+    140deg,
+    rgba(255, 255, 255, 0.36),
+    rgba($trophy-diamond, 0.08) 56%,
+    transparent 85%
+  );
+  opacity: 0.58;
+  mix-blend-mode: screen;
+}
+.diamond-exhibit__gem::after {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  background: linear-gradient(
+    128deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.68) 49%,
+    transparent 59%
+  );
+  clip-path: polygon(50% 5%, 91% 34%, 75% 83%, 50% 98%, 25% 83%, 9% 34%);
+  opacity: 0;
+  animation: diamond-shine 680ms $ease-expressive 580ms both;
+  content: "";
+}
+.diamond-exhibit__gem--locked {
+  color: #8d9da5;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.58))
+    drop-shadow(0 0 16px rgba($trophy-diamond, 0.12));
+}
+.diamond-exhibit__gem--locked .diamond-exhibit__gem-icon {
+  fill: rgba(160, 177, 184, 0.055);
+  filter: grayscale(0.7);
+  opacity: 0.7;
+}
+.diamond-exhibit__gem--locked::after {
+  display: none;
+}
+.diamond-exhibit__gem-lock {
+  position: absolute;
+  z-index: 4;
+  top: 48%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(235, 245, 248, 0.82);
+  filter: drop-shadow(0 2px 5px #000);
+}
+.diamond-exhibit__eyebrow {
+  position: relative;
+  z-index: 2;
+  margin: 0 0 $space-2;
+  color: $trophy-diamond-light;
+  font-size: $font-size-sm;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  animation: diamond-copy-in 380ms ease 630ms both;
+}
+.diamond-exhibit__earned-date {
+  position: relative;
+  z-index: 2;
+  margin: 0 0 $space-2;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+  animation: diamond-copy-in 380ms ease 650ms both;
+}
+.diamond-exhibit__locked-label {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: $space-2;
+  margin: 0 0 $space-1;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+}
+.trophy-modal__card--diamond h2 {
+  position: relative;
+  z-index: 2;
+  max-width: 100%;
+  margin: $space-2 0 $space-4;
+  font-size: clamp($font-size-2xl, 5vw, $font-size-4xl);
+  letter-spacing: -0.045em;
+  line-height: 1.12;
+  animation: diamond-copy-in 420ms ease 680ms both;
+}
+.diamond-exhibit__reward {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: $space-4;
+  padding: $space-3 $space-5;
+  border: 1px solid rgba($trophy-diamond-light, 0.19);
+  border-radius: $radius-pill;
+  background: rgba(4, 9, 12, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: diamond-copy-in 420ms ease 740ms both;
+}
+.diamond-exhibit__reward span {
+  color: $trophy-diamond-light;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0.14em;
+}
+.diamond-exhibit__reward small {
+  color: rgba(226, 243, 248, 0.9);
+  font-size: $font-size-sm;
+  letter-spacing: 0.08em;
+}
+.diamond-exhibit__completion {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: baseline;
+  gap: $space-2;
+  margin-top: $space-5;
+  color: $color-text-secondary;
+  animation: diamond-copy-in 420ms ease 800ms both;
+}
+.diamond-exhibit__completion strong {
+  color: #fff;
+  font-family: $font-mono;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-light;
+}
+.diamond-exhibit__completion span {
+  font-size: $font-size-sm;
+}
+.diamond-exhibit__description {
+  position: relative;
+  z-index: 2;
+  max-width: 42ch;
+  margin: $space-4 0 0 !important;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+  line-height: $line-height-relaxed;
+  animation: diamond-copy-in 420ms ease 840ms both;
+}
+.trophy-modal__card--diamond-locked .diamond-exhibit__eyebrow {
+  color: $color-text-secondary;
+}
+.trophy-modal__card--diamond-locked .diamond-exhibit__reward {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.trophy-modal__card--diamond-locked .diamond-exhibit__reward span {
+  color: $color-text-secondary;
+}
+.trophy-modal__card--diamond-locked .diamond-exhibit__gem {
+  animation-name: diamond-arrive-locked;
+}
+@keyframes diamond-arrive-locked {
+  from {
+    transform: translateY(8px) scale(0.92);
+    opacity: 0.35;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 0.8;
+  }
+}
+@keyframes diamond-arrive {
+  from {
+    transform: translateY(9px) scale(0.88);
+    opacity: 0.35;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+@keyframes diamond-shine {
+  0% {
+    opacity: 0;
+    transform: translateX(-55%);
+  }
+  20% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(55%);
+  }
+}
+@keyframes diamond-copy-in {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
 @media (max-width: $breakpoint-md) {
-  .trophy-modal__card--diamond { min-height: min(620px, 94dvh); }
+  .trophy-modal__card--diamond {
+    min-height: min(620px, 94dvh);
+  }
 }
 @media (max-width: $breakpoint-sm) {
   .trophy-modal {
@@ -441,25 +952,68 @@
     padding-bottom: max($space-4, env(safe-area-inset-bottom));
     padding-left: max($space-4, env(safe-area-inset-left));
   }
-  .trophy-modal__card { width: 100%; max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - #{$space-8}); padding: $space-8 $space-5; border-radius: $radius-lg; }
-  .trophy-modal__achievement-image { width: 32px; height: 32px; flex-basis: 32px; }
-  .trophy-modal__card--diamond { width: 100%; min-height: 0; padding: $space-8 $space-5; }
-  .diamond-exhibit__gem { width: clamp(150px, 46vw, 190px); margin-bottom: $space-3; }
-  .diamond-exhibit__halo { width: min(320px, 84vw); }
-  .diamond-exhibit__orbit--one { width: 260px; height: 90px; }
-  .diamond-exhibit__orbit--two { width: 230px; height: 74px; }
-  .diamond-exhibit__reward { gap: $space-2; padding-inline: $space-3; }
-  .diamond-exhibit__reward span { font-size: $font-size-sm; }
-  .diamond-exhibit__reward small { font-size: $font-size-sm; }
+  .trophy-modal__card {
+    width: 100%;
+    max-height: calc(
+      100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) -
+        #{$space-8}
+    );
+    padding: $space-8 $space-5;
+    border-radius: $radius-lg;
+  }
+  .trophy-modal__card--diamond {
+    width: 100%;
+    min-height: 0;
+    padding: $space-8 $space-5;
+  }
+  .diamond-exhibit__gem {
+    width: clamp(150px, 46vw, 190px);
+    margin-bottom: $space-3;
+  }
+  .diamond-exhibit__halo {
+    width: min(320px, 84vw);
+  }
+  .diamond-exhibit__orbit--one {
+    width: 260px;
+    height: 90px;
+  }
+  .diamond-exhibit__orbit--two {
+    width: 230px;
+    height: 74px;
+  }
+  .diamond-exhibit__reward {
+    gap: $space-2;
+    padding-inline: $space-3;
+  }
+  .diamond-exhibit__reward span {
+    font-size: $font-size-sm;
+  }
+  .diamond-exhibit__reward small {
+    font-size: $font-size-sm;
+  }
 }
 @media (max-width: 359px) {
-  .trophy-modal__card { padding-inline: $space-4; }
-  .trophy-modal__card--diamond { padding-inline: $space-3; }
-  .diamond-exhibit__reward { flex-direction: column; gap: $space-1; }
+  .trophy-modal__card {
+    padding-inline: $space-4;
+  }
+  .trophy-modal__card--diamond {
+    padding-inline: $space-3;
+  }
+  .diamond-exhibit__reward {
+    flex-direction: column;
+    gap: $space-1;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .trophy-modal *, .trophy-modal *::before, .trophy-modal *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
-  .trophy-modal__shine { animation: none !important; }
+  .trophy-modal *,
+  .trophy-modal *::before,
+  .trophy-modal *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
   .trophy-modal-enter-from .trophy-modal__card,
-  .trophy-modal-leave-to .trophy-modal__card { transform: none; }
+  .trophy-modal-leave-to .trophy-modal__card {
+    transform: none;
+  }
 }

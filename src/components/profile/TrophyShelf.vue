@@ -676,16 +676,9 @@ onBeforeUnmount(() => {
     </header>
 
     <div
-      v-if="loading && !compact"
-      class="trophy-shelf__state"
-      role="status"
-    >
-      Cataloguing this shelf…
-    </div>
-
-    <div
-      v-else-if="
+      v-if="
         !trophies.length &&
+        !loading &&
         !compact
       "
       class="trophy-shelf__state"

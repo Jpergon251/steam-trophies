@@ -7,7 +7,6 @@ const props = defineProps({
   trophies: { type: Array, default: () => [] },
   games: { type: Array, default: () => [] },
   status: { type: String, default: 'idle' },
-  progress: { type: Object, default: () => ({ processed: 0, total: 0 }) },
 })
 defineEmits(['select-trophy', 'select-diamond', 'request-achievement-icons'])
 
@@ -28,7 +27,7 @@ const shelves = computed(() => ({
 <template>
   <section class="trophy-cabinet" aria-label="Trophy cabinet">
     <p v-if="status === 'loading'" class="trophy-cabinet__loading" role="status">
-      {{ $t('profile.cabinet.loading', { processed: progress.processed, total: progress.total }) }}
+      {{ $t('profile.cabinet.loading') }}
     </p>
     <p v-else-if="status === 'error'" class="profile-page__inline-state">
       {{ $t('profile.cabinet.error') }}
@@ -39,7 +38,7 @@ const shelves = computed(() => ({
       :tier="key"
       :label="$t(`profile.cabinet.${key}`)"
       :trophies="shelves[key]"
-      :loading="status === 'loading'"
+      :loading="status !== 'success'"
       @select="$emit('select-trophy', $event)"
       @request-achievement-icons="$emit('request-achievement-icons', $event)"
     />
@@ -47,7 +46,7 @@ const shelves = computed(() => ({
       tier="diamond"
       :label="$t('profile.cabinet.diamond')"
       :trophies="shelves.diamond"
-      :loading="status === 'loading'"
+      :loading="status !== 'success'"
       diamonds
       @select-diamond="$emit('select-diamond', $event)"
     />

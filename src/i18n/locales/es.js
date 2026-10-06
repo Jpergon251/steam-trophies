@@ -61,14 +61,13 @@ export default {
       cached: 'Datos en caché · no se puede actualizar ahora',
       loadingCache: 'Cargando colección en caché…',
       updating: 'Actualizando…',
-      updatingProgress: 'Actualizando colección · {processed} / {total}',
     },
     tabs: {
       display: 'Vitrina',
       games: 'Juegos',
     },
     cabinet: {
-      loading: 'Catalogando tu colección · {processed} / {total} juegos',
+      loading: 'Cargando resumen de trofeos…',
       error: 'Algunos datos de trofeos no se pudieron cargar.',
       bronze: 'Bronce',
       silver: 'Plata',
