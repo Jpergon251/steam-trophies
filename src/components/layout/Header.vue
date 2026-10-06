@@ -13,11 +13,11 @@
           class="landing__refresh"
           :disabled="!canRefresh"
           :aria-busy="syncActive"
-          :aria-label="$t('header.refreshAria')"
+          :aria-label="refreshLabel"
           @click="manualRefresh"
         >
           <RefreshCw class="landing__refresh-icon" :size="17" :stroke-width="1.8" aria-hidden="true" />
-          <span class="landing__refresh-label">{{ $t('header.refresh') }}</span>
+          <span class="landing__refresh-label">{{ refreshLabel }}</span>
         </button>
         <span class="landing__countdown" aria-live="polite">
           {{ canRefresh ? formattedCountdown : $t('header.refreshing') }}
@@ -35,9 +35,11 @@ import { RouterLink, useRoute } from 'vue-router'
 import { useSteamProfilesStore } from '../../stores/steamProfiles.js'
 import { RefreshCw, Trophy } from '@lucide/vue'
 import LanguageSelector from './LanguageSelector.vue'
+import { useI18n } from '../../i18n'
 
 const store = useSteamProfilesStore()
 const route = useRoute()
+const { t } = useI18n()
 const isLandingPage = computed(() => route.name === 'home')
 const isProfilePage = computed(() => route.name === 'profile')
 const currentSteamId = computed(() => isProfilePage.value ? String(route.params.steamId || '') : '')
@@ -47,10 +49,15 @@ const syncState = computed(() => currentSteamId.value ? store.syncs[currentSteam
 const refreshPending = ref(false)
 const canRefresh = computed(() =>
   profileLoaded.value &&
-  syncState.value?.phase === 'idle' &&
   !syncActive.value &&
   !refreshPending.value,
 )
+const refreshLabel = computed(() => {
+  if (syncActive.value) return t('header.syncing')
+  if (syncState.value?.phase === 'complete') return t('header.syncComplete')
+  if (['partial-error', 'error'].includes(syncState.value?.phase)) return t('header.syncPartial')
+  return t('header.sync')
+})
 
 const countdown = ref(60)
 let intervalId = null

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 
 import app.services.steam as steam_service
-from app.main import InMemoryRateLimiter, app, fastapi_app
+from app.main import InMemoryRateLimiter, _rate_limit_group, app, fastapi_app
 
 STEAM_ID = "76561199548509683"
 
@@ -92,6 +92,7 @@ class ApiCompatibilityTests(unittest.IsolatedAsyncioTestCase):
             STEAM_ID,
             force_refresh=True,
             batch_index=0,
+            selected_app_ids=None,
         )
 
     async def test_summary_route_accepts_batch_index(self):
@@ -120,6 +121,7 @@ class ApiCompatibilityTests(unittest.IsolatedAsyncioTestCase):
             STEAM_ID,
             force_refresh=False,
             batch_index=2,
+            selected_app_ids=None,
         )
 
     async def test_summary_route_without_index_defaults_to_one_page(self):
@@ -147,7 +149,53 @@ class ApiCompatibilityTests(unittest.IsolatedAsyncioTestCase):
             STEAM_ID,
             force_refresh=False,
             batch_index=0,
+            selected_app_ids=None,
         )
+
+    async def test_summary_route_accepts_a_targeted_appid_set(self):
+        summary = {"steamid": STEAM_ID, "games": [], "trophies": [], "errors": {}}
+        with patch(
+            "app.main.get_achievement_summaries",
+            new=AsyncMock(return_value=summary),
+        ) as mocked:
+            response = await request_app(
+                f"/api/steam/profile/{STEAM_ID}/achievements?appids=10&appids=20",
+                client_port=5221,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        mocked.assert_awaited_once_with(
+            STEAM_ID,
+            force_refresh=False,
+            batch_index=0,
+            selected_app_ids=[10, 20],
+        )
+
+    async def test_compact_player_achievement_fallback_route(self):
+        summary = {
+            "summary": {
+                "appid": 10,
+                "achievement_count": 2,
+                "unlocked_count": 1,
+                "tier_counts": {"bronze": 1, "silver": 0, "gold": 0},
+                "available": True,
+                "status": "complete",
+                "reason": None,
+            },
+            "trophies": [],
+        }
+        with patch(
+            "app.main.get_player_achievement_summary",
+            new=AsyncMock(return_value=summary),
+        ) as mocked:
+            response = await request_app(
+                f"/api/steam/profile/{STEAM_ID}/games/10/achievement-summary",
+                client_port=5222,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), summary)
+        mocked.assert_awaited_once_with(STEAM_ID, 10, force_refresh=False)
 
     async def test_summary_upstream_error_is_cors_enabled_and_logged(self):
         upstream_request = httpx.Request("GET", "https://api.steampowered.com/")
@@ -363,6 +411,12 @@ class RateLimitTests(unittest.TestCase):
         allowed, retry_after = limiter.check("192.0.2.1", "search", 1)
         self.assertFalse(allowed)
         self.assertGreaterEqual(retry_after, 1)
+
+    def test_individual_summary_fallback_uses_achievement_rate_limit(self):
+        group = _rate_limit_group(
+            f"/api/steam/profile/{STEAM_ID}/games/10/achievement-summary",
+        )
+        self.assertEqual(group[0], "achievements")
 
 
 class RateLimitMiddlewareTests(unittest.IsolatedAsyncioTestCase):

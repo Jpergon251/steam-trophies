@@ -42,18 +42,18 @@ function handleArtworkError(event) {
     <span class="archive-list-row__body">
       <span class="archive-list-row__heading">
         <strong class="archive-list-row__name" :title="game.name">{{ game.name }}</strong>
-        <template v-if="game.achievementCount">
+        <template v-if="game.achievementSummaryKnown && game.achievementCount">
           <span class="archive-list-row__completion">
-            <span>{{ game.unlockedCount }} / {{ game.achievementCount }} {{ $t('profile.games.trophies') }}</span>
-            <b>{{ game.progress }}%</b>
+            <span>{{ game.achievementSummaryStatus === 'partial' ? '≥ ' : '' }}{{ game.unlockedCount }} / {{ game.achievementCount }} {{ $t('profile.games.trophies') }}</span>
+            <b v-if="game.achievementSummaryStatus !== 'partial'">{{ game.progress }}%</b>
           </span>
         </template>
         <span v-else class="archive-list-row__empty">
-          {{ $t('profile.games.noTrophies') }}
+          {{ game.achievementSummaryKnown ? $t('profile.games.noTrophies') : $t('profile.games.achievementDataUnavailable') }}
         </span>
       </span>
 
-      <span v-if="game.achievementCount" class="archive-list-row__details">
+      <span v-if="game.achievementSummaryKnown && game.achievementCount" class="archive-list-row__details">
         <span class="archive-list-row__tiers">
           <span
             v-for="tier in ['bronze', 'silver', 'gold']"
@@ -74,6 +74,7 @@ function handleArtworkError(event) {
           </span>
         </span>
         <span
+          v-if="game.achievementSummaryStatus !== 'partial'"
           class="archive-list-row__track"
           role="progressbar"
           :aria-valuenow="game.progress"

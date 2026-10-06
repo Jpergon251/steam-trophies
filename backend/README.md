@@ -78,6 +78,8 @@ achievement requests. The backend routes are:
 - `GET /api/steam/profile/{steam_id}/games`
 - `GET /api/steam/profile/{steam_id}/achievements` (first page)
 - `GET /api/steam/profile/{steam_id}/achievements?batch_index=0`
+- `GET /api/steam/profile/{steam_id}/achievements?appids=...` (targeted batch, up to 350 owned AppIDs)
+- `GET /api/steam/profile/{steam_id}/games/{app_id}/achievement-summary` (compact individual fallback)
 - `GET /api/steam/profile/{steam_id}/games/{app_id}/achievements`
 
 Before this optimization, a cold profile with `N` games could make up to
@@ -105,13 +107,25 @@ batch size is a practical request-URL limit, not a Steam-documented AppID
 limit, and batches such as 10,000 cannot be sent in a single request.
 The Top method is not part of the published official Web API contract. Results
 contain unlocked display fields and aggregate totals, not the full locked
-catalogue, API names, or unlock timestamps. Entries missing from a partly valid
-response are repaired individually, with a limit of ten fallbacks per batch;
-an empty or failed multi-game batch is reported instead of triggering a mass
-legacy fallback. A result list reaching `TOP_ACHIEVEMENTS_MAX` is treated as
-possibly truncated and falls back for that game. If a 350-AppID page exceeds
-the upstream URL limit and returns HTTP 414, the backend retries it as smaller
-sequential Steam requests while preserving the same logical frontend page.
+catalogue, API names, or unlock timestamps. A result list reaching
+`TOP_ACHIEVEMENTS_MAX` is preserved as a partial summary and retried only for
+those AppIDs, sequentially in groups of 25 at limits 2,000, 5,000, and 10,000.
+Each retry replaces that game's earlier summary; it is not added as a delta.
+Games still capped at 10,000 remain partial with their known unlocked
+achievements retained. Games absent from a valid Top response can use the
+existing legacy repair, limited to ten per logical batch. A failed Top batch
+does not trigger individual calls; its games are reported as unknown. Thus the
+owned-games list remains authoritative and missing summaries never remove
+games or imply zero achievements.
+
+Each batch INFO record reports processed games, complete/partial/unknown
+summaries, known unlocked achievements, games retried at each retry level,
+Top request calls (including URL-split calls), observed Steam requests, logical
+batch count, and HTTP errors. `retries_by_level` counts games attempted at each
+limit, while `top_request_calls` counts Top endpoint calls. If a 350-AppID page
+exceeds the upstream URL limit and returns HTTP 414, the backend retries it as
+smaller sequential Steam requests while preserving the same logical frontend
+page.
 Full game details are stored
 in IndexedDB only after the user opens the game; reopening a fresh cached detail
 uses zero Steam requests. All Steam requests reuse the existing in-memory

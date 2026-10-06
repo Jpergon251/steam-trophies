@@ -5,6 +5,10 @@ export default {
     refresh: 'Refresh',
     refreshAria: 'Refresh Steam data',
     refreshing: 'Updating',
+    sync: 'Sync Steam',
+    syncing: 'Syncing…',
+    syncComplete: 'Steam synced',
+    syncPartial: 'Sync incomplete',
     language: 'Language',
     languages: {
       en: 'English',
@@ -51,6 +55,7 @@ export default {
     openSteamProfile: 'Open Steam profile',
     overview: 'Player collection overview',
     trophyBreakdown: 'Unlocked trophies by tier and completed games',
+    partialStats: 'Partial data · achievement information unavailable for {count} games.',
     stats: {
       games: 'GAMES',
       trophies: 'TROPHIES',
@@ -61,6 +66,10 @@ export default {
       cached: 'Cached data · unable to refresh right now',
       loadingCache: 'Loading cached collection…',
       updating: 'Updating…',
+      syncProgress: 'Syncing Steam… {processed} / {total}',
+      fallbackProgress: 'Games without summaries: {processed} / {total}',
+      syncComplete: '{checked} games checked · {updated} updated · {newGames} new · {withAchievements} with achievements · {withoutInfo} without information · {errors} errors · {unlocked} unlocked achievements',
+      syncPartial: 'Partial sync · {checked} games checked · {withoutInfo} without information · {errors} errors · {unlocked} unlocked achievements',
     },
     tabs: {
       display: 'Display',
@@ -88,6 +97,7 @@ export default {
       openGame: 'View {name} details',
       trophies: 'trophies',
       noTrophies: 'No achievements available',
+      achievementDataUnavailable: 'Achievement data unavailable',
       searchPlaceholder: 'Search your games...',
       searchAria: 'Search your games',
       filterAria: 'Filter games',

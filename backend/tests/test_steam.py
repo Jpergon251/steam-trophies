@@ -11,8 +11,10 @@ from app.config import settings
 from app.services.steam import (
     SteamConcurrencyLimiter,
     _compact_top_achievement_response,
+    _normalize_top_summary,
     get_achievement_summaries,
     get_player_achievements,
+    get_player_achievement_summary,
     steam_request,
 )
 
@@ -195,6 +197,34 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(game["achievement_columns"]["bronze"]["names"], ["Common"])
         self.assertEqual(game["achievement_columns"]["silver"]["names"], [])
 
+    async def test_top_response_at_limit_keeps_rows_and_marks_summary_partial(self):
+        compact = _compact_top_achievement_response(
+            {
+                "response": {
+                    "games": [{
+                        "appid": 10,
+                        "total_achievements": 5_000,
+                        "achievements": [
+                            {"name": "Known 1", "player_percent_unlocked": 50},
+                            {"name": "Known 2", "player_percent_unlocked": 10},
+                        ],
+                    }],
+                },
+            },
+            max_achievements=2,
+        )
+
+        game = compact["response"]["games"][0]
+        normalized, _ = _normalize_top_summary(10, game, max_achievements=2)
+        self.assertEqual(game["summary_status"], "partial")
+        self.assertEqual(normalized["status"], "partial")
+        self.assertEqual(normalized["unlocked_count"], 2)
+        self.assertEqual(normalized["tier_counts"], {
+            "bronze": 1,
+            "silver": 0,
+            "gold": 1,
+        })
+
     async def test_zero_partial_and_complete_progress_keep_exact_counts(self):
         owned = {
             "response": {
@@ -267,42 +297,94 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
         fallback.assert_awaited_once_with(self.steam_id, 20)
         self.assertEqual(result["errors"], {})
 
-    async def test_result_at_configured_cap_falls_back_for_that_game(self):
+    async def test_limited_summary_is_retained_and_retried_at_higher_limit(self):
         owned = {
             "response": {
                 "games": [{"appid": 10, "name": "Capped"}],
             },
         }
-        top = {
-            "response": {
-                "games": [{
-                    "appid": 10,
-                    "total_achievements": 3,
-                    "achievements": [{"name": "one"}],
-                }],
-            },
-        }
-        legacy = {
-            "game": {"appid": 10, "name": "Capped"},
-            "achievements": [{"apiname": "ONE", "achieved": 1}],
-            "achievement_count": 3,
-            "available": True,
-        }
+        requested_maxima = []
+
+        async def respond(endpoint, params, **kwargs):
+            if endpoint.endswith("GetOwnedGames/v1/"):
+                return owned
+            requested_maxima.append(params["max_achievements"])
+            max_achievements = int(params["max_achievements"])
+            unlocked = min(max_achievements, 1_500)
+            return {
+                "response": {
+                    "games": [{
+                        "appid": 10,
+                        "total_achievements": 3_000,
+                        "achievements": [
+                            {"name": f"achievement-{index}", "player_percent_unlocked": 50}
+                            for index in range(unlocked)
+                        ],
+                    }],
+                },
+            }
+
         with (
             patch(
                 "app.services.steam.steam_request",
-                new=AsyncMock(side_effect=[owned, top]),
-            ),
-            patch(
-                "app.services.steam.get_player_achievements",
-                new=AsyncMock(return_value=legacy),
-            ) as fallback,
+                new=AsyncMock(side_effect=respond),
+            ) as request,
             patch.object(settings, "top_achievements_max", 1),
         ):
-            result = await get_achievement_summaries(self.steam_id)
+            result = await get_achievement_summaries(self.steam_id, batch_index=0)
 
-        self.assertEqual(result["games"][0]["unlocked_count"], 1)
-        fallback.assert_awaited_once_with(self.steam_id, 10)
+        self.assertEqual(requested_maxima, [1, 2_000])
+        self.assertEqual(request.await_count, 3)
+        self.assertEqual(result["games"][0]["unlocked_count"], 1_500)
+        self.assertEqual(result["games"][0]["status"], "complete")
+        self.assertEqual(result["metrics"]["games_retried"], 1)
+        self.assertEqual(result["metrics"]["retries_by_level"]["2000"], 1)
+        self.assertEqual(result["metrics"]["unlocked_achievements_found"], 1_500)
+
+    async def test_adaptive_retry_preserves_partial_rows_at_maximum(self):
+        owned = {
+            "response": {
+                "games": [{"appid": 10, "name": "Very large"}],
+            },
+        }
+        requested_maxima = []
+
+        async def respond(endpoint, params, **kwargs):
+            if endpoint.endswith("GetOwnedGames/v1/"):
+                return owned
+            max_achievements = int(params["max_achievements"])
+            requested_maxima.append(max_achievements)
+            return {
+                "response": {
+                    "games": [{
+                        "appid": 10,
+                        "total_achievements": 20_000,
+                        "achievements": [
+                            {"name": f"achievement-{index}", "player_percent_unlocked": 50}
+                            for index in range(max_achievements)
+                        ],
+                    }],
+                },
+            }
+
+        with (
+            patch("app.services.steam.steam_request", new=AsyncMock(side_effect=respond)),
+            patch.object(settings, "top_achievements_max", 1_000),
+        ):
+            result = await get_achievement_summaries(self.steam_id, batch_index=0)
+
+        summary = result["games"][0]
+        self.assertEqual(requested_maxima, [1_000, 2_000, 5_000, 10_000])
+        self.assertEqual(summary["unlocked_count"], 10_000)
+        self.assertEqual(summary["status"], "partial")
+        self.assertEqual(result["metrics"]["retries_by_level"], {
+            "2000": 1,
+            "5000": 1,
+            "10000": 1,
+        })
+        self.assertEqual(result["metrics"]["games_still_truncated"], 1)
+        self.assertEqual(result["metrics"]["summaries_partial"], 1)
+        self.assertEqual(result["metrics"]["summaries_unknown"], 0)
 
     async def test_unexpected_single_game_response_uses_legacy_fallback(self):
         owned = {
@@ -329,6 +411,7 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
             result = await get_achievement_summaries(self.steam_id)
 
         self.assertFalse(result["games"][0]["available"])
+        self.assertEqual(result["games"][0]["status"], "unknown")
         fallback.assert_awaited_once_with(self.steam_id, 10)
 
     async def test_failed_multi_game_batch_does_not_trigger_mass_legacy_fallback(self):
@@ -347,12 +430,13 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = await get_achievement_summaries(self.steam_id)
 
-        self.assertEqual(result["games"], [])
+        self.assertEqual(len(result["games"]), 19)
+        self.assertTrue(all(item["status"] == "unknown" for item in result["games"]))
         self.assertEqual(len(result["errors"]), 19)
         self.assertTrue(all(item["status"] == 429 for item in result["errors"].values()))
         fallback.assert_not_awaited()
 
-    async def test_failed_small_batch_falls_back_only_for_its_games(self):
+    async def test_failed_small_batch_marks_games_unknown_without_individual_fallback(self):
         owned = {
             "response": {
                 "games": [{"appid": 10, "name": "A"}, {"appid": 20, "name": "B"}],
@@ -361,12 +445,6 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
         request = httpx.Request("GET", "https://api.steampowered.com/")
         response = httpx.Response(503, request=request)
         error = httpx.HTTPStatusError("unavailable", request=request, response=response)
-        legacy = {
-            "game": {"appid": 10},
-            "achievements": [],
-            "achievement_count": 1,
-            "available": True,
-        }
         with (
             patch(
                 "app.services.steam.steam_request",
@@ -374,15 +452,16 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch(
                 "app.services.steam.get_player_achievements",
-                new=AsyncMock(return_value=legacy),
+                new=AsyncMock(),
             ) as fallback,
             patch.object(settings, "top_achievements_batch_size", 2),
         ):
             result = await get_achievement_summaries(self.steam_id)
 
         self.assertEqual([item["appid"] for item in result["games"]], [10, 20])
-        self.assertEqual(result["errors"], {})
-        self.assertEqual(fallback.await_count, 2)
+        self.assertEqual([game["status"] for game in result["games"]], ["unknown", "unknown"])
+        self.assertEqual(len(result["errors"]), 2)
+        fallback.assert_not_awaited()
 
     async def test_configured_batch_size_and_max_are_applied(self):
         owned = {
@@ -475,6 +554,112 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
             [int(value) for key, value in top_calls[0].args[1].items() if key.startswith("appids[")],
             [3, 4],
         )
+
+    async def test_targeted_summary_only_requests_selected_owned_appids(self):
+        owned = {
+            "response": {
+                "games": [{"appid": app_id, "name": str(app_id)} for app_id in (10, 20, 30)],
+            },
+        }
+
+        async def respond(endpoint, params, **kwargs):
+            if endpoint.endswith("GetOwnedGames/v1/"):
+                return owned
+            app_ids = [
+                int(value)
+                for key, value in params.items()
+                if key.startswith("appids[")
+            ]
+            return {
+                "response": {
+                    "games": [
+                        {"appid": app_id, "total_achievements": 1, "achievements": []}
+                        for app_id in app_ids
+                    ],
+                },
+            }
+
+        with patch("app.services.steam.steam_request", new=AsyncMock(side_effect=respond)) as request:
+            result = await get_achievement_summaries(
+                self.steam_id,
+                batch_index=0,
+                selected_app_ids=[20, 10, 20],
+            )
+
+        top_calls = [
+            call for call in request.await_args_list
+            if "GetTopAchievementsForGames" in call.args[0]
+        ]
+        self.assertEqual([item["appid"] for item in result["games"]], [10, 20])
+        self.assertEqual(result["metrics"]["processed_games"], 2)
+        self.assertEqual(len(top_calls), 1)
+        self.assertEqual(
+            [int(value) for key, value in top_calls[0].args[1].items() if key.startswith("appids[")],
+            [10, 20],
+        )
+
+    async def test_targeted_summary_rejects_appids_outside_owned_games(self):
+        with patch(
+            "app.services.steam.steam_request",
+            new=AsyncMock(return_value={"response": {"games": [{"appid": 10} ]}}),
+        ):
+            with self.assertRaisesRegex(ValueError, "belong to the Steam library"):
+                await get_achievement_summaries(
+                    self.steam_id,
+                    selected_app_ids=[20],
+                )
+
+    async def test_player_achievement_summary_distinguishes_no_stats_and_unknown(self):
+        no_stats = {
+            "available": False,
+            "reason": "no_stats",
+            "achievements": [],
+        }
+        with patch(
+            "app.services.steam.get_player_achievements",
+            new=AsyncMock(return_value=no_stats),
+        ):
+            no_achievement_result = await get_player_achievement_summary(self.steam_id, 10)
+
+        self.assertEqual(no_achievement_result["summary"]["status"], "complete")
+        self.assertEqual(no_achievement_result["summary"]["reason"], "no_achievements")
+        self.assertEqual(no_achievement_result["summary"]["achievement_count"], 0)
+
+        with patch(
+            "app.services.steam.get_player_achievements",
+            new=AsyncMock(return_value={"available": False, "reason": "unavailable"}),
+        ):
+            unknown_result = await get_player_achievement_summary(self.steam_id, 20)
+
+        self.assertEqual(unknown_result["summary"]["status"], "unknown")
+        self.assertIsNone(unknown_result["summary"]["unlocked_count"])
+
+    async def test_player_achievement_summary_returns_compact_known_unlocks(self):
+        achievements = {
+            "available": True,
+            "achievement_count": 3,
+            "achievements": [
+                {"apiname": "rare", "name": "Rare", "achieved": 1, "global_percent": 10},
+                {"apiname": "common", "name": "Common", "achieved": 1, "global_percent": 70},
+                {"apiname": "locked", "name": "Locked", "achieved": 0, "global_percent": 90},
+            ],
+        }
+        with patch(
+            "app.services.steam.get_player_achievements",
+            new=AsyncMock(return_value=achievements),
+        ):
+            result = await get_player_achievement_summary(self.steam_id, 10)
+
+        self.assertEqual(result["summary"]["status"], "complete")
+        self.assertEqual(result["summary"]["achievement_count"], 3)
+        self.assertEqual(result["summary"]["unlocked_count"], 2)
+        self.assertEqual(result["summary"]["tier_counts"], {
+            "bronze": 1,
+            "silver": 0,
+            "gold": 1,
+        })
+        self.assertEqual(len(result["trophies"]), 2)
+        self.assertNotIn("achievements", result)
 
     async def test_large_profiles_are_served_in_compact_pages(self):
         profile_sizes = {

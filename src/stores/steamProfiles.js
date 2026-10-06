@@ -1,11 +1,19 @@
 import { defineStore } from 'pinia'
 import {
+  getSteamAchievementSummary,
   getSteamAchievementSummaries,
   getSteamAchievements,
   getSteamGames,
   getSteamProfile,
 } from '../services/steam.js'
 import { getTrophyTier } from '../data/trophyTiers.js'
+import { getKnownProfileStats } from '../data/profileStats.js'
+import {
+  runBoundedQueue,
+  runSequentialBatches,
+  selectStaleSummaryGames,
+  selectUnknownFallbackGames,
+} from '../data/syncQueue.js'
 import {
   CACHE_TTL,
   readGameAchievementDetails,
@@ -13,6 +21,7 @@ import {
   readTrophyGroups,
   serializeProfile,
   writeAchievementBatch,
+  writeAchievementSummaryBatch,
   writeAchievements,
   writeGame,
   writeGamesSnapshot,
@@ -25,6 +34,21 @@ const ACHIEVEMENT_CACHE_TTL = 30 * 60 * 1000
 const ACTIVE_GAME_CACHE_TTL = 60 * 1000
 const NEGATIVE_ACHIEVEMENT_CACHE_TTL = 5 * 60 * 1000
 const SUMMARY_BATCH_RETRIES = 2
+const FALLBACK_CONCURRENCY = 2
+const PROFILE_STAT_KEYS = ['bronze', 'silver', 'gold', 'completed', 'knownGames', 'unknownGames']
+
+function updateProfileStats(store, steamId, previousGame, nextGame) {
+  const id = String(steamId)
+  const current = store.profileStats[id]
+    || getKnownProfileStats(store.profiles[id]?.games || [])
+  const previous = previousGame ? getKnownProfileStats([previousGame]) : null
+  const next = nextGame ? getKnownProfileStats([nextGame]) : null
+  const updated = { ...current }
+  for (const key of PROFILE_STAT_KEYS) {
+    updated[key] += (next?.[key] || 0) - (previous?.[key] || 0)
+  }
+  store.profileStats[id] = updated
+}
 
 function getArtUrls(game) {
   if (!game || !game.appid) {
@@ -88,27 +112,56 @@ function deriveGame(game, achievements = [], available = null, updatedAt = 0, su
   const detailsComplete = summary.detailsComplete
     ?? game.achievementsDetailsComplete
     ?? Boolean(updatedAt && available !== null)
+  const achievementSummaryVersion = Number(
+    summary.achievementSummaryVersion ?? game.achievementSummaryVersion,
+  ) || 0
+  const achievementSummaryStatus = detailsComplete
+    ? 'complete'
+    : summary.achievementSummaryStatus
+      ?? game.achievementSummaryStatus
+      ?? (achievementSummaryVersion === 1 ? 'complete' : 'unknown')
+  const achievementSummaryKnown = ['complete', 'partial'].includes(achievementSummaryStatus)
   const iconsComplete = summary.iconsComplete
     ?? game.achievementsIconsComplete
     ?? false
-  const achievementCount = detailsComplete
-    ? normalizedAchievements.length
-    : Number(summary.achievementCount ?? game.achievementCount ?? game.totalAchievements) || 0
-  const unlockedCount = detailsComplete
-    ? unlocked.length
-    : Number(summary.unlockedCount ?? game.unlockedCount ?? game.unlockedAchievements) || 0
-  const isDiamond = Boolean(achievementCount > 0 && unlockedCount === achievementCount)
-  const progress = achievementCount ? Math.round((unlockedCount / achievementCount) * 100) : 0
+  const achievementCount = achievementSummaryKnown
+    ? detailsComplete
+      ? normalizedAchievements.length
+      : Number(summary.achievementCount ?? game.achievementCount ?? game.totalAchievements) || 0
+    : null
+  const unlockedCount = achievementSummaryKnown
+    ? detailsComplete
+      ? unlocked.length
+      : Number(summary.unlockedCount ?? game.unlockedCount ?? game.unlockedAchievements) || 0
+    : null
+  const isDiamond = Boolean(
+    achievementSummaryStatus === 'complete' &&
+    achievementCount > 0 &&
+    unlockedCount === achievementCount,
+  )
+  const progress = achievementCount
+    ? achievementSummaryStatus === 'partial'
+      ? null
+      : Math.round((unlockedCount / achievementCount) * 100)
+    : achievementSummaryKnown
+      ? 0
+      : null
 
   const storedTierCounts = summary.tierCounts || game.tierCounts || game.trophyCounts || {}
   const tierCounts = {
-    bronze: detailsComplete
+    bronze: !achievementSummaryKnown
+      ? null
+      : detailsComplete
       ? 0
       : Number(storedTierCounts.bronze) || 0,
-    silver: detailsComplete
+    silver: !achievementSummaryKnown
+      ? null
+      : detailsComplete
       ? 0
       : Number(storedTierCounts.silver) || 0,
-    gold: detailsComplete
+    gold: !achievementSummaryKnown
+      ? null
+      : detailsComplete
       ? 0
       : Number(storedTierCounts.gold) || 0,
     diamond: isDiamond ? 1 : 0,
@@ -153,9 +206,18 @@ function deriveGame(game, achievements = [], available = null, updatedAt = 0, su
     achievementsPlaytime: Number(game.achievementsPlaytime ?? playtimeForever) || 0,
     has_community_visible_stats: Boolean(game.has_community_visible_stats),
     libraryOrder: Number(game.libraryOrder) || 0,
-    achievementSummaryVersion: Number(
-      summary.achievementSummaryVersion ?? game.achievementSummaryVersion,
+    achievementSummaryVersion,
+    achievementSummaryStatus,
+    achievementSummaryKnown,
+    achievementFallbackAttemptedAt: Number(
+      summary.achievementFallbackAttemptedAt ?? game.achievementFallbackAttemptedAt,
     ) || 0,
+    achievementSyncAttemptAt: Number(
+      summary.achievementSyncAttemptAt ?? game.achievementSyncAttemptAt,
+    ) || 0,
+    achievementSyncError: summary.achievementSyncError
+      ?? game.achievementSyncError
+      ?? '',
   }
 }
 
@@ -176,6 +238,10 @@ function fromCache(game) {
       iconsComplete: game.achievementsIconsComplete,
       tierCounts: game.tierCounts,
       achievementSummaryVersion: game.achievementSummaryVersion,
+      achievementSummaryStatus: game.achievementSummaryStatus,
+      achievementFallbackAttemptedAt: game.achievementFallbackAttemptedAt,
+      achievementSyncAttemptAt: game.achievementSyncAttemptAt,
+      achievementSyncError: game.achievementSyncError,
     },
   )
 }
@@ -226,6 +292,10 @@ function mergeAchievementResult(game, achievements, available, summary = {}) {
       iconsComplete: summary.iconsComplete ?? game.achievementsIconsComplete,
       tierCounts: summary.tierCounts,
       achievementSummaryVersion: summary.achievementSummaryVersion,
+      achievementSummaryStatus: summary.achievementSummaryStatus,
+      achievementFallbackAttemptedAt: summary.achievementFallbackAttemptedAt,
+      achievementSyncAttemptAt: summary.achievementSyncAttemptAt,
+      achievementSyncError: summary.achievementSyncError,
     },
   )
 }
@@ -252,12 +322,23 @@ function makeLibraryGame(rawGame, previous, libraryOrder) {
     iconsComplete: previous?.achievementsIconsComplete,
     tierCounts: previous?.tierCounts,
     achievementSummaryVersion: previous?.achievementSummaryVersion,
+    achievementSummaryStatus: previous?.achievementSummaryStatus,
+    achievementFallbackAttemptedAt: previous?.achievementFallbackAttemptedAt,
+    achievementSyncAttemptAt: previous?.achievementSyncAttemptAt,
+    achievementSyncError: previous?.achievementSyncError,
   })
 }
 
 function isAchievementDataStale(game, now = Date.now(), requireSummary = true) {
   if (!game) return true
-  if (requireSummary && game.achievementSummaryVersion !== 1) return true
+  if (
+    requireSummary &&
+    ![1, 2].includes(Number(game.achievementSummaryVersion))
+  ) return true
+  if (game.achievementSummaryStatus === 'unknown') {
+    return !game.achievementsUpdatedAt ||
+      now - game.achievementsUpdatedAt >= NEGATIVE_ACHIEVEMENT_CACHE_TTL
+  }
   // Never checked achievements yet
   if (!game.achievementsUpdatedAt || game.achievementsAvailable === null) return true
 
@@ -316,6 +397,7 @@ function isSteamGameChanged(next, previous) {
   return !previous || Number(previous.playtime_forever) !== Number(next.playtime_forever)
     || Number(previous.playtime_2weeks) !== Number(next.playtime_2weeks)
     || Number(previous.rtime_last_played) !== Number(next.rtime_last_played)
+    || Boolean(previous.has_community_visible_stats) !== Boolean(next.has_community_visible_stats)
     || previous.name !== next.name || previous.img_icon_url !== next.img_icon_url || previous.img_logo_url !== next.img_logo_url
 }
 
@@ -323,6 +405,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
   state: () => ({
     // profiles[steamId] = { profile, games, gamesCachedAt, cachedAt, hydratedAt }
     profiles: {},
+    profileStats: {},
     // syncs[steamId] = { active, processed, total, stale, phase }
     syncs: {},
     // errors[steamId] = Error | null
@@ -342,6 +425,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
   }),
   getters: {
     profileFor: (state) => (steamId) => state.profiles[String(steamId)]?.profile || null,
+    statsFor: (state) => (steamId) => state.profileStats[String(steamId)] || getKnownProfileStats([]),
     gamesFor: (state) => (steamId) => state.profiles[String(steamId)]?.games || [],
     isSyncing: (state) => (steamId) => Boolean(state.syncs[String(steamId)]?.active),
     errorFor: (state) => (steamId) => state.errors[String(steamId)] || null,
@@ -385,6 +469,10 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
               unlockedCount: gameRecord.unlockedCount,
               tierCounts: gameRecord.tierCounts,
               achievementSummaryVersion: gameRecord.achievementSummaryVersion,
+              achievementSummaryStatus: gameRecord.achievementSummaryStatus,
+              achievementFallbackAttemptedAt: gameRecord.achievementFallbackAttemptedAt,
+              achievementSyncAttemptAt: gameRecord.achievementSyncAttemptAt,
+              achievementSyncError: gameRecord.achievementSyncError,
               detailsComplete: false,
             })
           })
@@ -396,6 +484,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
             cachedAt: snapshot.profileCachedAt || 0,
             hydratedAt: Date.now(),
           }
+          this.profileStats[id] = getKnownProfileStats(games)
         } catch (error) {
           console.warn('Could not read the Steam cache.', error)
         } finally {
@@ -428,7 +517,19 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
       const hadCache = Boolean(existing?.profile || existing?.games?.length)
 
       this.errors[id] = null
-      this.syncs[id] = { active: true, processed: 0, total: 0, stale: hadCache, phase: 'library' }
+      this.syncs[id] = {
+        active: true,
+        processed: 0,
+        total: 0,
+        stale: hadCache,
+        phase: 'library',
+        newGames: 0,
+        updatedGames: 0,
+        fallbackProcessed: 0,
+        fallbackTotal: 0,
+        errorCount: 0,
+        updatedAppIds: new Set(),
+      }
 
       try {
         const [profileResponse, owned] = await Promise.all([
@@ -458,6 +559,20 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
         const needsSnapshotWrite =
           !hadCache || removedGames.length > 0 || changedGames.length > 0 || snapshotStale
 
+        // Persist the collection before touching achievements so a later
+        // failure cannot lose the library. When nothing changed and the
+        // snapshot is fresh we skip the write entirely.
+        if (needsSnapshotWrite) {
+          await writeGamesSnapshot(id, {
+            profile: serializeProfile(profile),
+            games: nextGames,
+            removeMissing: !hadCache || removedGames.length > 0,
+            gamesCachedAt: Date.now(),
+          })
+        } else if (profileChanged) {
+          await writeProfile(id, serializeProfile(profile))
+        }
+
         this.profiles[id] = {
           profile: profile || this.profiles[id]?.profile || null,
           games: nextGames,
@@ -465,287 +580,442 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           cachedAt: Date.now(),
           hydratedAt: this.profiles[id]?.hydratedAt || Date.now(),
         }
+        this.profileStats[id] = getKnownProfileStats(nextGames)
 
-        // Persist the collection before touching achievements so a later
-        // failure cannot lose the library. When nothing changed and the
-        // snapshot is fresh we skip the write entirely.
-        if (needsSnapshotWrite) {
-          try {
-            await writeGamesSnapshot(id, {
-              profile: serializeProfile(profile),
-              games: nextGames,
-              removeMissing: !hadCache || removedGames.length > 0,
-              gamesCachedAt: this.profiles[id].gamesCachedAt,
-            })
-          } catch (snapshotError) {
-            console.error('Failed to write games snapshot to cache:', snapshotError)
-            // PARTE 8: Do not cancel achievement sync if library snapshot write fails
-          }
-        } else if (profileChanged) {
-          try {
-            await writeProfile(id, serializeProfile(profile))
-          } catch (profileError) {
-            console.warn('Could not persist updated profile:', profileError)
-          }
-        }
-
-        // The library is persisted before requesting batched summaries.
-        const summariesAreStale = nextGames.some((game) =>
-          isAchievementDataStale(game, Date.now()),
+        const summaryCandidates = selectStaleSummaryGames(
+          nextGames,
+          (game, now) => {
+            const previous = previousById.get(String(game.appid))
+            const communityStatsChanged = previous &&
+              Boolean(previous.has_community_visible_stats) !==
+                Boolean(game.has_community_visible_stats)
+            return communityStatsChanged || isAchievementDataStale(game, now)
+          },
         )
+        const sync = this.syncs[id]
+        sync.total = nextGames.length
+        sync.processed = nextGames.length - summaryCandidates.length
+        sync.pending = summaryCandidates.length
+        sync.newGames = nextGames.filter((game) => !previousById.has(String(game.appid))).length
+        sync.phase = 'summaries'
 
-        if (summariesAreStale && !this.achievementPromises[id]) {
-          this.syncs[id] = {
-            active: true,
-            processed: 0,
-            total: nextGames.length,
-            stale: hadCache,
-            phase: 'achievements',
-          }
-          const forceRefresh = nextGames.some((game) =>
-            shouldForceAchievementRefresh(game),
+        const forceRefresh = summaryCandidates.some((game) =>
+          shouldForceAchievementRefresh(game),
+        )
+        await this.refreshAchievementSummaries(id, summaryCandidates, forceRefresh)
+
+        const fallbackCandidates = selectUnknownFallbackGames(
+          this.profiles[id]?.games || [],
+          Date.now(),
+          NEGATIVE_ACHIEVEMENT_CACHE_TTL,
+        )
+          .map((game) => String(game.appid))
+        sync.phase = 'fallback'
+        sync.fallbackTotal = fallbackCandidates.length
+        sync.fallbackProcessed = 0
+        await this.refreshUnknownAchievementSummaries(id, fallbackCandidates)
+
+        const syncedGames = this.profiles[id]?.games || []
+        const unknownGames = syncedGames.filter(
+          (game) => game.achievementSummaryStatus === 'unknown',
+        ).length
+        const partialGames = syncedGames.filter(
+          (game) => game.achievementSummaryStatus === 'partial',
+        ).length
+        sync.active = false
+        sync.processed = sync.total
+        sync.phase = sync.errorCount || unknownGames || partialGames
+          ? 'partial-error'
+          : 'complete'
+        sync.updatedGames = sync.updatedAppIds.size
+        delete sync.updatedAppIds
+        sync.unknownGames = unknownGames
+        sync.partialGames = partialGames
+        sync.gamesWithAchievements = syncedGames.filter(
+          (game) => game.achievementSummaryKnown && Number(game.unlockedCount) > 0,
+        ).length
+        sync.unlockedAchievements = syncedGames.reduce(
+          (total, game) => total + (
+            game.achievementSummaryKnown ? Number(game.unlockedCount) || 0 : 0
+          ),
+          0,
+        )
+        if (sync.errorCount) {
+          this.errors[id] = new Error(
+            `${sync.errorCount} game${sync.errorCount === 1 ? '' : 's'} could not be synchronized.`,
           )
-          const refresh = this.refreshAchievementSummaries(
-            id,
-            nextGames,
-            forceRefresh,
-          )
-          this.achievementPromises[id] = refresh.finally(() => {
-            delete this.achievementPromises[id]
-            if (this.syncs[id]?.phase === 'achievements') {
-              this.syncs[id] = {
-                active: false,
-                processed: this.syncs[id].total,
-                total: nextGames.length,
-                stale: hadCache,
-                phase: 'idle',
-              }
-            }
-          })
-        } else {
-          this.syncs[id] = { active: false, processed: 0, total: 0, stale: hadCache, phase: 'idle' }
         }
       } catch (error) {
         this.errors[id] = error
         if (hadCache) {
           // Never destroy valid cached data because a refresh failed.
           console.warn('Steam revalidation failed; cached collection remains available.', error)
-          this.syncs[id] = { active: false, processed: 0, total: 0, stale: true, phase: 'idle' }
+          this.syncs[id] = {
+            ...this.syncs[id],
+            active: false,
+            stale: true,
+            phase: 'error',
+            errorCount: (this.syncs[id]?.errorCount || 0) + 1,
+          }
         } else {
-          this.syncs[id] = { active: false, processed: 0, total: 0, stale: false, phase: 'idle' }
+          this.syncs[id] = {
+            ...this.syncs[id],
+            active: false,
+            stale: false,
+            phase: 'error',
+            errorCount: (this.syncs[id]?.errorCount || 0) + 1,
+          }
           throw error
         }
       }
     },
 
-    /** Loads unlocked-game summaries in one cached backend request. */
+    /** Refreshes only stale summaries and commits every successful batch. */
     async refreshAchievementSummaries(steamId, games, forceRefresh = false) {
       const id = String(steamId)
-      try {
-        const gamesById = new Map(games.map((game) => [String(game.appid), game]))
-        const gameIndexesById = new Map(games.map((game, index) => [String(game.appid), index]))
-        const appIdSortedGames = games
-          .filter((game) => Number.isInteger(Number(game.appid)))
-          .slice()
-          .sort((left, right) => Number(left.appid) - Number(right.appid))
-        let completedBatches = 0
-        let invalidSummaries = 0
-        let failedSummaries = 0
+      const profileState = this.profiles[id]
+      const sync = this.syncs[id]
+      const gameIndexes = new Map(
+        profileState.games.map((game, index) => [String(game.appid), index]),
+      )
+      const sortedGames = games
+        .filter((game) => Number.isInteger(Number(game.appid)))
+        .slice()
+        .sort((left, right) => Number(left.appid) - Number(right.appid))
 
-        const fetchBatch = async (batchIndex, refreshBatch = false) => {
-          let lastError
-          for (let attempt = 0; attempt <= SUMMARY_BATCH_RETRIES; attempt += 1) {
-            try {
-              return await getSteamAchievementSummaries(id, {
-                forceRefresh: refreshBatch,
-                batchIndex,
-              })
-            } catch (error) {
-              lastError = error
-              if (attempt < SUMMARY_BATCH_RETRIES) {
-                await new Promise((resolve) => window.setTimeout(resolve, 750 * (attempt + 1)))
-              }
+      await runSequentialBatches(sortedGames, 350, async (batch, batchIndex) => {
+        const appIds = batch.map((game) => String(game.appid))
+        const shouldForce = forceRefresh && batch.some((game) => shouldForceAchievementRefresh(game))
+        let response
+        let lastError
+        for (let attempt = 0; attempt <= SUMMARY_BATCH_RETRIES; attempt += 1) {
+          try {
+            response = await getSteamAchievementSummaries(id, {
+              forceRefresh: shouldForce,
+              appIds,
+            })
+            break
+          } catch (error) {
+            lastError = error
+            if (attempt < SUMMARY_BATCH_RETRIES) {
+              await new Promise((resolve) => window.setTimeout(resolve, 750 * (attempt + 1)))
             }
           }
-          throw lastError
         }
 
-        const batchNeedsRefresh = (batchIndex, batchSize) => forceRefresh
-          && appIdSortedGames
-            .slice(batchIndex * batchSize, (batchIndex + 1) * batchSize)
-            .some((game) => shouldForceAchievementRefresh(game))
+        const markSyncError = async (game, message) => {
+          const gameIndex = gameIndexes.get(String(game.appid))
+          if (gameIndex === undefined) return
+          const current = profileState.games[gameIndex]
+          let updated
+          if (current.achievementSummaryKnown) {
+            updated = {
+              ...current,
+              achievementSyncAttemptAt: Date.now(),
+              achievementSyncError: message,
+            }
+          } else {
+            updated = mergeAchievementResult(current, [], false, {
+              detailsComplete: false,
+              achievementSummaryVersion: 2,
+              achievementSummaryStatus: 'unknown',
+              achievementSyncAttemptAt: Date.now(),
+              achievementSyncError: message,
+            })
+          }
+          updateProfileStats(this, id, current, updated)
+          profileState.games[gameIndex] = updated
+          return updated
+        }
 
-        const processBatch = async (response, batchIndex) => {
+        if (!response) {
+          sync.errorCount += batch.length
+          const failedGames = []
+          for (const game of batch) {
+            const updated = await markSyncError(
+              game,
+              lastError?.message || 'summary_request_failed',
+            )
+            if (updated) failedGames.push(updated)
+          }
+          if (failedGames.length) await writeAchievementSummaryBatch(id, failedGames)
+          console.warn(
+            `Could not load Steam summary batch ${batchIndex + 1}; existing cached summaries were preserved.`,
+            lastError,
+          )
+          sync.processed = Math.min(sync.total, sync.processed + batch.length)
+          sync.pending = Math.max(0, sync.pending - batch.length)
+          return
+        }
+
+        if (
+          !Array.isArray(response?.games) ||
+          !Array.isArray(response?.trophies) ||
+          !response?.errors ||
+          typeof response.errors !== 'object'
+        ) {
+          sync.errorCount += batch.length
+          const failedGames = []
+          for (const game of batch) {
+            const updated = await markSyncError(game, 'invalid_summary_response')
+            if (updated) failedGames.push(updated)
+          }
+          if (failedGames.length) await writeAchievementSummaryBatch(id, failedGames)
+          sync.processed = Math.min(sync.total, sync.processed + batch.length)
+          sync.pending = Math.max(0, sync.pending - batch.length)
+          return
+        }
+
+        const gamesById = new Map(batch.map((game) => [String(game.appid), game]))
+        const trophyGroupsByAppId = new Map()
+        for (const trophyGroup of response.trophies) {
+          const appid = String(trophyGroup?.appid ?? '')
+          const tier = trophyGroup?.tier
+          const columns = trophyGroup?.columns
+          const names = ['names', 'descriptions', 'icons', 'gray_icons', 'percentages']
           if (
-            !Array.isArray(response?.games) ||
-            !Array.isArray(response?.trophies) ||
-            !response?.errors ||
-            typeof response.errors !== 'object'
-          ) {
-            throw new Error('Steam returned an invalid achievement summary batch.')
+            !gamesById.has(appid) ||
+            !['bronze', 'silver', 'gold'].includes(tier) ||
+            !columns ||
+            !names.every((name) => Array.isArray(columns[name])) ||
+            !names.every((name) => columns[name].length === columns.names.length)
+          ) continue
+          const groups = trophyGroupsByAppId.get(appid) || {}
+          groups[tier] = columns
+          trophyGroupsByAppId.set(appid, groups)
+        }
+
+        const updatedEntries = []
+        const seen = new Set()
+        for (const summary of response.games) {
+          const appid = String(summary?.appid ?? '')
+          const gameIndex = gameIndexes.get(appid)
+          if (!gamesById.has(appid) || gameIndex === undefined) continue
+          seen.add(appid)
+          const current = profileState.games[gameIndex]
+          if (summary.status === 'unknown') {
+            const reason = response.errors[appid]?.reason || 'summary_unknown'
+            const updated = current.achievementSummaryKnown
+              ? {
+                  ...current,
+                  achievementSyncAttemptAt: Date.now(),
+                  achievementSyncError: reason,
+                }
+              : mergeAchievementResult(current, [], false, {
+                  detailsComplete: false,
+                  achievementSummaryVersion: 2,
+                  achievementSummaryStatus: 'unknown',
+                  achievementSyncAttemptAt: Date.now(),
+                  achievementSyncError: reason,
+                })
+            updatedEntries.push({ game: updated, gameIndex, unknown: true })
+            continue
           }
 
-          const updatedGames = []
-          const profileState = this.profiles[id]
-          if (!profileState) throw new Error('The Steam profile is no longer loaded.')
-          const trophyGroupsByAppId = new Map()
-          for (const summary of response.games) {
-            const game = gamesById.get(String(summary.appid))
-            const gameIndex = gameIndexesById.get(String(summary.appid))
-            if (!game || gameIndex === undefined) continue
-            if (
-              typeof summary.available !== 'boolean' ||
-              !Number.isInteger(summary.achievement_count) ||
-              !Number.isInteger(summary.unlocked_count) ||
-              summary.unlocked_count < 0 ||
-              summary.unlocked_count > summary.achievement_count ||
-              !summary.tier_counts ||
-              !['bronze', 'silver', 'gold'].every((tier) =>
-                Number.isInteger(summary.tier_counts[tier]) &&
-                summary.tier_counts[tier] >= 0,
-              ) ||
-              ['bronze', 'silver', 'gold'].reduce(
-                (total, tier) => total + summary.tier_counts[tier],
-                0,
-              ) !== summary.unlocked_count
-            ) {
-              invalidSummaries += 1
-              continue
-            }
-            const updatedGame = mergeAchievementResult(
-              profileState.games[gameIndex],
-              [],
-              summary.available,
-              {
-                detailsComplete: false,
-                iconsComplete: false,
-                achievementCount: summary.achievement_count,
-                unlockedCount: summary.unlocked_count,
-                tierCounts: summary.tier_counts,
-                achievementSummaryVersion: 1,
-              },
-            )
-            updatedGames.push({ game: updatedGame, gameIndex })
-          }
+          const countsValid =
+            typeof summary.available === 'boolean' &&
+            Number.isInteger(summary.achievement_count) &&
+            Number.isInteger(summary.unlocked_count) &&
+            summary.unlocked_count >= 0 &&
+            summary.unlocked_count <= summary.achievement_count &&
+            summary.tier_counts &&
+            ['bronze', 'silver', 'gold'].every((tier) =>
+              Number.isInteger(summary.tier_counts[tier]) &&
+              summary.tier_counts[tier] >= 0,
+            ) &&
+            ['bronze', 'silver', 'gold'].reduce(
+              (total, tier) => total + summary.tier_counts[tier],
+              0,
+            ) === summary.unlocked_count
+          if (!countsValid) continue
 
-          for (const trophyGroup of response.trophies) {
-            const appid = String(trophyGroup?.appid ?? '')
-            const tier = trophyGroup?.tier
-            const columns = trophyGroup?.columns
-            const columnNames = ['names', 'descriptions', 'icons', 'gray_icons', 'percentages']
-            if (
-              !gamesById.has(appid) ||
-              !['bronze', 'silver', 'gold'].includes(tier) ||
-              !columns ||
-              !columnNames.every((name) => Array.isArray(columns[name])) ||
-              !columnNames.every((name) => columns[name].length === columns.names.length)
-            ) {
-              invalidSummaries += 1
-              continue
-            }
-            let groups = trophyGroupsByAppId.get(appid)
-            if (!groups) {
-              groups = {}
-              trophyGroupsByAppId.set(appid, groups)
-            }
-            if (groups[tier]) {
-              invalidSummaries += 1
-              continue
-            }
-            groups[tier] = columns
-          }
+          const updated = mergeAchievementResult(current, [], summary.available, {
+            detailsComplete: false,
+            iconsComplete: false,
+            achievementCount: summary.achievement_count,
+            unlockedCount: summary.unlocked_count,
+            tierCounts: summary.tier_counts,
+            achievementSummaryVersion: 2,
+            achievementSummaryStatus: summary.status === 'partial' ? 'partial' : 'complete',
+            achievementFallbackAttemptedAt: current.achievementFallbackAttemptedAt,
+            achievementSyncAttemptAt: Date.now(),
+            achievementSyncError: '',
+          })
+          const groups = trophyGroupsByAppId.get(appid) || {}
+          if (!['bronze', 'silver', 'gold'].every(
+            (tier) => (groups[tier]?.names.length || 0) === updated.tierCounts[tier],
+          )) continue
+          updatedEntries.push({ game: updated, gameIndex, unknown: false })
+        }
 
-          const validUpdatedGames = []
-          for (const entry of updatedGames) {
-            const groups = trophyGroupsByAppId.get(String(entry.game.appid)) || {}
-            const countsMatch = ['bronze', 'silver', 'gold'].every(
-              (tier) => (groups[tier]?.names.length || 0) === entry.game.tierCounts[tier],
-            )
-            if (countsMatch) validUpdatedGames.push(entry)
-            else invalidSummaries += 1
+        const acceptedIds = new Set(
+          updatedEntries.map(({ game }) => String(game.appid)),
+        )
+        for (const summary of response.games) {
+          const appid = String(summary?.appid ?? '')
+          if (seen.has(appid) && !acceptedIds.has(appid)) {
+            sync.errorCount += 1
+            await markSyncError(gamesById.get(appid), 'invalid_summary_data')
           }
-
-          failedSummaries += Object.keys(response.errors).length
-          for (const [appid, error] of Object.entries(response.errors)) {
-            console.warn(
-              `Steam summary batch ${batchIndex + 1} omitted AppID ${appid} (status ${error?.status ?? 'n/a'}, reason ${error?.reason ?? 'unknown'}).`,
-            )
+        }
+        for (const game of batch) {
+          if (!seen.has(String(game.appid))) {
+            sync.errorCount += 1
+            await markSyncError(game, 'summary_missing_from_response')
           }
-
-          if (validUpdatedGames.length) {
+        }
+        if (updatedEntries.length) {
+          const knownEntries = updatedEntries.filter((entry) => !entry.unknown)
+          const unknownEntries = updatedEntries.filter((entry) => entry.unknown)
+          if (knownEntries.length) {
             await writeAchievementBatch(
               id,
-              validUpdatedGames.map(({ game }) => game),
+              knownEntries.map(({ game }) => game),
               trophyGroupsByAppId,
             )
-            for (const { game, gameIndex } of validUpdatedGames) {
-              profileState.games[gameIndex] = game
+          }
+          if (unknownEntries.length) {
+            await writeAchievementSummaryBatch(
+              id,
+              unknownEntries.map(({ game }) => game),
+            )
+          }
+          for (const { game, gameIndex } of updatedEntries) {
+            updateProfileStats(this, id, profileState.games[gameIndex], game)
+            profileState.games[gameIndex] = game
+            if (game.achievementSummaryKnown) {
+              sync.updatedAppIds.add(String(game.appid))
             }
           }
         }
+        sync.processed = Math.min(sync.total, sync.processed + batch.length)
+        sync.pending = Math.max(0, sync.pending - batch.length)
+      })
+    },
 
-        let firstResponse = await fetchBatch(0)
-        const hasBatchMetadata = Number.isInteger(firstResponse.batch_count)
-        const batchCount = hasBatchMetadata
-          ? firstResponse.batch_count
-          : appIdSortedGames.length ? 1 : 0
-        const batchSize = Number.isInteger(firstResponse.batch_size)
-          ? firstResponse.batch_size
-          : Math.max(1, appIdSortedGames.length)
-        if (
-          batchCount < 0 ||
-          batchSize < 1 && batchCount > 0 ||
-          (Number.isInteger(firstResponse.batch_index) && firstResponse.batch_index !== 0)
-        ) {
-          throw new Error('Steam returned invalid achievement batch metadata.')
-        }
-        if (batchNeedsRefresh(0, batchSize)) {
-          firstResponse = await fetchBatch(0, true)
-        }
-        const sync = this.syncs[id]
-        if (sync?.phase === 'achievements') sync.total = batchCount
-        await processBatch(firstResponse, 0)
-        if (batchCount === 0) return
-        completedBatches += 1
-        if (sync?.phase === 'achievements') sync.processed = completedBatches
-
-        for (let batchIndex = 1; batchIndex < batchCount; batchIndex += 1) {
+    /** Retries unknown games individually with a small worker pool. */
+    async refreshUnknownAchievementSummaries(steamId, appIds) {
+      const id = String(steamId)
+      const profileState = this.profiles[id]
+      const sync = this.syncs[id]
+      const gameIndexes = new Map(
+        profileState.games.map((game, index) => [String(game.appid), index]),
+      )
+      await runBoundedQueue(appIds, FALLBACK_CONCURRENCY, async (appId) => {
+        const gameIndex = gameIndexes.get(String(appId))
+        if (gameIndex === undefined) return
+        const current = profileState.games[gameIndex]
+        let result
+        let lastError
+        for (let attempt = 0; attempt <= SUMMARY_BATCH_RETRIES; attempt += 1) {
           try {
-            const response = await fetchBatch(
-              batchIndex,
-              batchNeedsRefresh(batchIndex, batchSize),
-            )
-            if (
-              Number.isInteger(response.batch_index) &&
-              response.batch_index !== batchIndex
-            ) {
-              throw new Error(`Steam returned the wrong achievement batch (${batchIndex}).`)
-            }
-            await processBatch(response, batchIndex)
-            completedBatches += 1
-            if (sync?.phase === 'achievements') sync.processed = completedBatches
+            result = await getSteamAchievementSummary(id, appId)
+            break
           } catch (error) {
-            failedSummaries += 1
-            console.warn(
-              `Could not load Steam achievement summary batch ${batchIndex + 1}/${batchCount}; cached data was retained.`,
-              error,
-            )
+            lastError = error
+            if (attempt < SUMMARY_BATCH_RETRIES) {
+              await new Promise((resolve) => window.setTimeout(resolve, 750 * (attempt + 1)))
+            }
           }
         }
 
-        if (invalidSummaries) {
-          console.warn(`Steam returned ${invalidSummaries} malformed achievement summaries; cached data was retained for those games.`)
+        const attemptedAt = Date.now()
+        if (!result?.summary || !Array.isArray(result.trophies)) {
+          sync.errorCount += 1
+          const updated = {
+            ...current,
+            achievementFallbackAttemptedAt: attemptedAt,
+            achievementSyncAttemptAt: attemptedAt,
+            achievementSyncError: lastError?.message || 'fallback_request_failed',
+          }
+          updateProfileStats(this, id, current, updated)
+          profileState.games[gameIndex] = updated
+          await writeGame(id, updated)
+        } else {
+          const summary = result.summary
+          const validUnknown = summary.status === 'unknown'
+          const validKnown =
+            ['complete', 'partial'].includes(summary.status) &&
+            Number.isInteger(summary.achievement_count) &&
+            Number.isInteger(summary.unlocked_count) &&
+            summary.unlocked_count >= 0 &&
+            summary.unlocked_count <= summary.achievement_count &&
+            summary.tier_counts &&
+            ['bronze', 'silver', 'gold'].every((tier) =>
+              Number.isInteger(summary.tier_counts[tier]) &&
+              summary.tier_counts[tier] >= 0,
+            ) &&
+            ['bronze', 'silver', 'gold'].reduce(
+              (total, tier) => total + summary.tier_counts[tier],
+              0,
+            ) === summary.unlocked_count
+          if (validUnknown) {
+            const updated = mergeAchievementResult(current, [], false, {
+              detailsComplete: false,
+              achievementSummaryVersion: 2,
+              achievementSummaryStatus: 'unknown',
+              achievementFallbackAttemptedAt: attemptedAt,
+              achievementSyncAttemptAt: attemptedAt,
+              achievementSyncError: summary.reason || 'steam_unavailable',
+            })
+            updateProfileStats(this, id, current, updated)
+            profileState.games[gameIndex] = updated
+            await writeGame(id, updated)
+          } else if (validKnown) {
+            const updated = mergeAchievementResult(current, [], summary.available, {
+              detailsComplete: false,
+              iconsComplete: false,
+              achievementCount: summary.achievement_count,
+              unlockedCount: summary.unlocked_count,
+              tierCounts: summary.tier_counts,
+              achievementSummaryVersion: 2,
+              achievementSummaryStatus: summary.status,
+              achievementFallbackAttemptedAt: attemptedAt,
+              achievementSyncAttemptAt: attemptedAt,
+              achievementSyncError: '',
+            })
+            const groups = new Map()
+            for (const item of result.trophies) {
+              const bucket = groups.get(String(item.appid)) || {}
+              bucket[item.tier] = item.columns
+              groups.set(String(item.appid), bucket)
+            }
+            await writeAchievementBatch(id, [updated], groups)
+            updateProfileStats(this, id, current, updated)
+            profileState.games[gameIndex] = updated
+            sync.updatedAppIds.add(String(updated.appid))
+          } else {
+            sync.errorCount += 1
+            const preserved = {
+              ...current,
+              achievementFallbackAttemptedAt: attemptedAt,
+              achievementSyncAttemptAt: attemptedAt,
+              achievementSyncError: 'invalid_fallback_summary',
+            }
+            updateProfileStats(this, id, current, preserved)
+            profileState.games[gameIndex] = preserved
+            await writeGame(id, preserved)
+          }
         }
-        if (failedSummaries) {
-          this.errors[id] = new Error(
-            `${failedSummaries} Steam achievement summaries remain unavailable.`,
-          )
-          console.warn(`${failedSummaries} Steam achievement summaries remain unavailable.`)
+        sync.fallbackProcessed += 1
+      }, async (appId, error) => {
+        const gameIndex = gameIndexes.get(String(appId))
+        if (gameIndex === undefined) return
+        const current = profileState.games[gameIndex]
+        const attemptedAt = Date.now()
+        const preserved = {
+          ...current,
+          achievementFallbackAttemptedAt: attemptedAt,
+          achievementSyncAttemptAt: attemptedAt,
+          achievementSyncError: error?.message || 'fallback_persistence_failed',
         }
-      } catch (error) {
-        this.errors[id] = error
-        console.warn('Could not refresh batched Steam achievement summaries; cached data remains available.', error)
-      }
+        sync.errorCount += 1
+        sync.fallbackProcessed += 1
+        updateProfileStats(this, id, current, preserved)
+        profileState.games[gameIndex] = preserved
+        await writeGame(id, preserved)
+        console.warn(`Steam achievement fallback failed for AppID ${appId}.`, error)
+      })
     },
 
     async storeAchievementResult(steamId, game, achievements, available, summary = {}) {
@@ -760,6 +1030,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
         available,
         summary,
       )
+      updateProfileStats(this, id, profileState.games[index], derived)
       profileState.games.splice(index, 1, derived)
 
       try {
@@ -791,7 +1062,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
         const segments = []
         let cursor = 0
         for (const game of games) {
-          if (game.achievementSummaryVersion !== 1) continue
+          if (![1, 2].includes(Number(game.achievementSummaryVersion))) continue
           const count = Number(game.tierCounts?.[tier]) || 0
           if (!count) continue
           const segmentStart = Math.max(0, rangeStart - cursor)
@@ -880,7 +1151,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
             (item) => String(item.appid) === String(appId),
           )
           if (index < 0) return null
-          this.profiles[id].games.splice(index, 1, mergeAchievementResult(
+          const updated = mergeAchievementResult(
             this.profiles[id].games[index],
             achievements,
             cached.available,
@@ -888,7 +1159,9 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
               detailsComplete: true,
               iconsComplete: cached.iconsComplete,
             },
-          ))
+          )
+          updateProfileStats(this, id, this.profiles[id].games[index], updated)
+          this.profiles[id].games.splice(index, 1, updated)
           return this.profiles[id].games[index]
         }
         const result = await getSteamAchievements(id, appId, {
@@ -964,6 +1237,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
     clearProfileMemory(steamId) {
       const id = String(steamId)
       delete this.profiles[id]
+      delete this.profileStats[id]
       delete this.errors[id]
       delete this.syncs[id]
       delete this.hydration[id]

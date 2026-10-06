@@ -14,6 +14,7 @@ from app.services.steam import (
     configure_steam_runtime,
     get_owned_games,
     get_player_achievements,
+    get_player_achievement_summary,
     get_achievement_summaries,
     get_steam_profile,
     search_steam_profile,
@@ -95,7 +96,7 @@ def _masked_client_ip(client_ip: str) -> str:
 def _rate_limit_group(path: str) -> tuple[str, int] | None:
     if path == "/api/steam/search":
         return "search", settings.rate_limit_search
-    if path.endswith("/achievements"):
+    if path.endswith("/achievements") or path.endswith("/achievement-summary"):
         return "achievements", settings.rate_limit_achievements
     if path.endswith("/games"):
         return "games", settings.rate_limit_games
@@ -211,12 +212,14 @@ async def steam_achievement_summaries(
     steam_id: str,
     force_refresh: bool = False,
     batch_index: int = Query(default=0, ge=0),
+    appids: list[int] | None = Query(default=None),
 ):
     try:
         result = await get_achievement_summaries(
             steam_id,
             force_refresh=force_refresh,
             batch_index=batch_index,
+            selected_app_ids=appids,
         )
         metrics = current_request_metrics.get()
         if metrics is not None:
@@ -249,6 +252,49 @@ async def steam_achievement_summaries(
         raise HTTPException(
             status_code=502,
             detail="Steam achievement summaries are not available right now.",
+        )
+
+@app.get("/api/steam/profile/{steam_id}/games/{app_id}/achievement-summary")
+async def steam_achievement_summary_fallback(
+    steam_id: str,
+    app_id: int,
+    force_refresh: bool = False,
+):
+    try:
+        return await get_player_achievement_summary(
+            steam_id,
+            app_id,
+            force_refresh=force_refresh,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except Exception as error:
+        upstream_status = (
+            error.response.status_code
+            if isinstance(error, httpx.HTTPStatusError)
+            else None
+        )
+        metrics = current_request_metrics.get()
+        if metrics is not None:
+            metrics.app_id = app_id
+            metrics.upstream_status = upstream_status
+            metrics.failure_reason = (
+                "steam_rate_limited"
+                if upstream_status == 429
+                else "upstream_error" if upstream_status is not None
+                else type(error).__name__
+            )
+        logger.warning(
+            "steam_achievement_summary_fallback_failure steam_id=%s appid=%s "
+            "original_status=%s reason=%s",
+            masked_steam_id(steam_id),
+            app_id,
+            upstream_status or "n/a",
+            type(error).__name__,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Steam achievement fallback is not available right now.",
         )
 
 @app.get("/api/steam/profile/{steam_id}/games/{app_id}/achievements")

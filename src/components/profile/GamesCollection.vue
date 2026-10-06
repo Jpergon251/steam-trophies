@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, LayoutGrid, List } from '@lucide/vue'
 import GameCard from './GameCard.vue'
 import GameListRow from './GameListRow.vue'
 import GamesToolbar from './GamesToolbar.vue'
+import { hasKnownAchievementSummary } from '../../data/profileStats.js'
 import { useI18n } from '../../i18n'
 
 const GAMES_VIEW_STORAGE_KEY = 'steam-trophies-games-view'
@@ -48,7 +49,7 @@ const filters = computed(() => [
   {
     key: 'progress',
     label: t('profile.games.filters.progress'),
-    count: props.loading && !props.games.length ? null : props.games.filter((game) => game.achievementsAvailable !== false && game.unlockedCount > 0 && !game.isDiamond).length,
+    count: props.loading && !props.games.length ? null : props.games.filter((game) => hasKnownAchievementSummary(game) && game.unlockedCount > 0 && !game.isDiamond).length,
   },
   {
     key: 'completed',
@@ -61,12 +62,19 @@ const matchingGames = computed(() => {
   const search = query.value.trim().toLocaleLowerCase()
   let result = props.games.filter((game) => !search || game.name.toLocaleLowerCase().includes(search))
   if (activeFilter.value === 'played') result = result.filter((game) => Number(game.playtime_forever) > 0)
-  if (activeFilter.value === 'progress') result = result.filter((game) => game.achievementsAvailable !== false && game.unlockedCount > 0 && !game.isDiamond)
+  if (activeFilter.value === 'progress') result = result.filter((game) => hasKnownAchievementSummary(game) && game.unlockedCount > 0 && !game.isDiamond)
   if (activeFilter.value === 'completed') result = result.filter((game) => game.isDiamond)
   return [...result].sort((a, b) => {
     if (sortBy.value === 'alphabetical') return a.name.localeCompare(b.name)
-    if (sortBy.value === 'trophies') return b.unlockedCount - a.unlockedCount || a.name.localeCompare(b.name)
-    if (sortBy.value === 'completion') return b.progress - a.progress || a.name.localeCompare(b.name)
+    if (sortBy.value === 'trophies' || sortBy.value === 'completion') {
+      const aKnown = hasKnownAchievementSummary(a)
+      const bKnown = hasKnownAchievementSummary(b)
+      if (aKnown !== bKnown) return aKnown ? -1 : 1
+      const valueOrder = sortBy.value === 'trophies'
+        ? (Number(b.unlockedCount) || 0) - (Number(a.unlockedCount) || 0)
+        : (Number(b.progress) || 0) - (Number(a.progress) || 0)
+      return valueOrder || a.name.localeCompare(b.name)
+    }
     if (sortBy.value === 'playtime') return (b.playtime_forever || 0) - (a.playtime_forever || 0) || a.name.localeCompare(b.name)
     const recentlyPlayed = (b.rtime_last_played || 0) - (a.rtime_last_played || 0)
     return recentlyPlayed || (b.playtime_forever || 0) - (a.playtime_forever || 0) || a.name.localeCompare(b.name)

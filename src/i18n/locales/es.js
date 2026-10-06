@@ -5,6 +5,10 @@ export default {
     refresh: 'Recargar',
     refreshAria: 'Recargar datos de Steam',
     refreshing: 'Actualizando',
+    sync: 'Sincronizar Steam',
+    syncing: 'Sincronizando…',
+    syncComplete: 'Steam sincronizado',
+    syncPartial: 'Sincronización parcial',
     language: 'Idioma',
     languages: {
       en: 'English',
@@ -51,6 +55,7 @@ export default {
     openSteamProfile: 'Abrir perfil de Steam',
     overview: 'Resumen de la colección del jugador',
     trophyBreakdown: 'Trofeos desbloqueados por categoría y juegos completados',
+    partialStats: 'Datos parciales · {count} juegos sin información de logros.',
     stats: {
       games: 'JUEGOS',
       trophies: 'TROFEOS',
@@ -61,6 +66,10 @@ export default {
       cached: 'Datos en caché · no se puede actualizar ahora',
       loadingCache: 'Cargando colección en caché…',
       updating: 'Actualizando…',
+      syncProgress: 'Sincronizando Steam… {processed} / {total}',
+      fallbackProgress: 'Logros sin resumen: {processed} / {total}',
+      syncComplete: '{checked} juegos comprobados · {updated} actualizados · {newGames} nuevos · {withAchievements} con logros · {withoutInfo} sin información · {errors} errores · {unlocked} logros desbloqueados',
+      syncPartial: 'Sincronización parcial · {checked} juegos comprobados · {withoutInfo} sin información · {errors} errores · {unlocked} logros desbloqueados',
     },
     tabs: {
       display: 'Vitrina',
@@ -88,6 +97,7 @@ export default {
       openGame: 'Ver detalles de {name}',
       trophies: 'trofeos',
       noTrophies: 'No hay logros disponibles',
+      achievementDataUnavailable: 'Datos de logros no disponibles',
       searchPlaceholder: 'Buscar en tus juegos...',
       searchAria: 'Buscar en tus juegos',
       filterAria: 'Filtrar juegos',

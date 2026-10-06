@@ -21,31 +21,35 @@ const selectedTrophy = ref(null)
 const steamId = computed(() => String(route.params.steamId || ''))
 const profile = computed(() => activeSteamId.value === steamId.value ? steamStore.profileFor(steamId.value) : null)
 const games = computed(() => activeSteamId.value === steamId.value ? steamStore.gamesFor(steamId.value) : [])
-const gameByAppId = computed(() => new Map(games.value.map((game) => [String(game.appid), game])))
-const profileStats = computed(() => games.value.reduce((stats, game) => {
-  const tiers = game.tierCounts || game.trophyCounts || {}
-  stats.bronze += Number(tiers.bronze) || 0
-  stats.silver += Number(tiers.silver) || 0
-  stats.gold += Number(tiers.gold) || 0
-  stats.completed += game.isDiamond ? 1 : 0
-  return stats
-}, { bronze: 0, silver: 0, gold: 0, completed: 0 }))
+const profileStats = computed(() => steamStore.statsFor(steamId.value))
 const unlockedTrophyCount = computed(() =>
   profileStats.value.bronze + profileStats.value.silver + profileStats.value.gold,
 )
-const achievementSummariesKnown = computed(() =>
-  games.value.length === 0 ||
-  games.value.every((game) => game.achievementSummaryVersion === 1),
-)
 const gamesStatus = computed(() => steamStore.errorFor(steamId.value) && !games.value.length ? 'error' : profile.value ? 'success' : 'loading')
 const syncState = computed(() => steamStore.syncs[steamId.value] || null)
-const collectionStatus = computed(() => {
-  if (!profile.value) return steamStore.isSyncing(steamId.value) ? 'loading' : 'success'
-  if (achievementSummariesKnown.value) return 'success'
-  if (steamStore.isSyncing(steamId.value)) return 'loading'
-  return 'error'
+const syncSummaryLabel = computed(() => {
+  const sync = syncState.value
+  if (!sync || !['complete', 'partial-error'].includes(sync.phase)) return ''
+  const values = {
+    checked: Number(sync.total) || 0,
+    updated: Number(sync.updatedGames) || 0,
+    newGames: Number(sync.newGames) || 0,
+    withAchievements: Number(sync.gamesWithAchievements) || 0,
+    withoutInfo: Number(sync.unknownGames) || 0,
+    errors: Number(sync.errorCount) || 0,
+    unlocked: (Number(sync.unlockedAchievements) || 0).toLocaleString(),
+  }
+  return t(sync.phase === 'complete' ? 'profile.cacheStatus.syncComplete' : 'profile.cacheStatus.syncPartial', values)
 })
-const trophyStatsDisplay = computed(() => achievementSummariesKnown.value ? null : '—')
+const collectionStatus = computed(() => {
+  if (!profile.value) return steamStore.isSyncing(steamId.value) ? 'loading' : 'error'
+  if (profileStats.value.unknownGames === 0) return 'complete'
+  if (profileStats.value.knownGames > 0) return 'partial'
+  return steamStore.isSyncing(steamId.value) ? 'loading' : 'error'
+})
+const trophyStatsDisplay = computed(() =>
+  profileStats.value.knownGames === 0 && games.value.length > 0 ? '—' : null,
+)
 const refreshError = computed(() => steamStore.errorFor(steamId.value) && profile.value ? t('profile.cacheStatus.cached') : '')
 const gamesLoading = computed(() => gamesStatus.value === 'loading' || (!games.value.length && collectionStatus.value === 'loading'))
 const activeSteamId = ref(steamId.value)
@@ -110,6 +114,10 @@ async function openGame({ game, context }) {
 function loadTrophyWindow(tier, start, end) {
   if (activeSteamId.value !== steamId.value) return Promise.resolve([])
   return steamStore.loadTrophyWindow(steamId.value, tier, start, end)
+}
+
+function findGameByAppId(appId) {
+  return games.value.find((game) => String(game.appid) === String(appId)) || null
 }
 </script>
 
@@ -223,6 +231,13 @@ function loadTrophyWindow(tier, start, end) {
                 <strong>{{ trophyStatsDisplay ?? profileStats.completed.toLocaleString() }}</strong>
               </span>
             </div>
+            <p
+              v-if="collectionStatus === 'partial'"
+              class="profile-page__cache-status"
+              role="status"
+            >
+              {{ $t('profile.partialStats', { count: profileStats.unknownGames }) }}
+            </p>
           </section>
           <div class="collection-shell">
             <ProfileViewTabs v-model="selectedView" />
@@ -235,15 +250,21 @@ function loadTrophyWindow(tier, start, end) {
             <p v-else-if="isHydrating" class="profile-page__cache-status" role="status">
               {{ $t('profile.cacheStatus.loadingCache') }}
             </p>
-            <p v-else-if="syncState?.active && syncState.phase === 'library'" class="profile-page__cache-status" role="status">
-              {{ $t('profile.cacheStatus.updating') }}
+            <p v-else-if="syncState?.active && syncState.phase === 'fallback'" class="profile-page__cache-status" role="status">
+              {{ $t('profile.cacheStatus.fallbackProgress', { processed: syncState.fallbackProcessed.toLocaleString(), total: syncState.fallbackTotal.toLocaleString() }) }}
+            </p>
+            <p v-else-if="syncState?.active" class="profile-page__cache-status" role="status">
+              {{ $t('profile.cacheStatus.syncProgress', { processed: syncState.processed.toLocaleString(), total: syncState.total.toLocaleString() }) }}
+            </p>
+            <p v-else-if="syncSummaryLabel" class="profile-page__cache-status" role="status">
+              {{ syncSummaryLabel }}
             </p>
             <TrophyCabinet
               v-if="selectedView === 'display'"
               :load-trophy-window="loadTrophyWindow"
               :games="games"
               :status="collectionStatus"
-              @select-trophy="selectedTrophy = { ...$event, game: gameByAppId.get(String($event.appid)) || null }"
+              @select-trophy="selectedTrophy = { ...$event, game: findGameByAppId($event.appid) }"
               @select-diamond="selectedTrophy = { isDiamond: true, game: $event, name: $event.name }"
             />
             <GamesCollection

@@ -240,19 +240,39 @@ export function serializeGame(game) {
   const unlocked = achievements.filter((a) => a.achieved);
   const detailsComplete = game.achievementsDetailsComplete
     ?? Boolean(game.achievementsUpdatedAt && game.achievementsAvailable !== null);
-  const achievementCount = detailsComplete
+  const achievementSummaryVersion = Number(game.achievementSummaryVersion) || 0;
+  const achievementSummaryStatus = detailsComplete
+    ? 'complete'
+    : game.achievementSummaryStatus
+      ?? (achievementSummaryVersion === 1 ? 'complete' : 'unknown');
+  const achievementSummaryKnown = ['complete', 'partial'].includes(achievementSummaryStatus);
+  const achievementCount = !achievementSummaryKnown
+    ? null
+    : detailsComplete
     ? achievements.length
     : Number(game.achievementCount ?? game.totalAchievements ?? game.achievement_count) || 0;
-  const unlockedCount = detailsComplete
+  const unlockedCount = !achievementSummaryKnown
+    ? null
+    : detailsComplete
     ? unlocked.length
     : Number(game.unlockedCount ?? game.unlockedAchievements ?? game.achievements_unlocked) || 0;
-  const progress = achievementCount ? Math.round((unlockedCount / achievementCount) * 100) : Number(game.progress || game.completion) || 0;
-  const isDiamond = Boolean(achievementCount > 0 && unlockedCount === achievementCount);
+  const progress = achievementSummaryStatus === 'partial'
+    ? null
+    : achievementCount
+      ? Math.round((unlockedCount / achievementCount) * 100)
+      : achievementSummaryKnown
+        ? 0
+        : null;
+  const isDiamond = Boolean(
+    achievementSummaryStatus === 'complete' &&
+    achievementCount > 0 &&
+    unlockedCount === achievementCount,
+  );
 
   const tierCounts = {
-    bronze: 0,
-    silver: 0,
-    gold: 0,
+    bronze: achievementSummaryKnown ? 0 : null,
+    silver: achievementSummaryKnown ? 0 : null,
+    gold: achievementSummaryKnown ? 0 : null,
     diamond: isDiamond ? 1 : 0,
   };
   if (detailsComplete && achievements.length) {
@@ -261,7 +281,7 @@ export function serializeGame(game) {
       if (tierCounts[tier] !== undefined) tierCounts[tier] += 1;
       else tierCounts.bronze += 1;
     }
-  } else if (game.tierCounts || game.trophyCounts) {
+  } else if (achievementSummaryKnown && (game.tierCounts || game.trophyCounts)) {
     const src = game.tierCounts || game.trophyCounts;
     tierCounts.bronze = Number(src.bronze) || 0;
     tierCounts.silver = Number(src.silver) || 0;
@@ -286,7 +306,12 @@ export function serializeGame(game) {
     fallbackUrl: String(game.fallbackUrl || ''),
     achievements,
     libraryOrder: Math.max(0, Number(game.libraryOrder) || 0),
-    achievementSummaryVersion: Number(game.achievementSummaryVersion) || 0,
+    achievementSummaryVersion,
+    achievementSummaryStatus,
+    achievementSummaryKnown,
+    achievementFallbackAttemptedAt: Number(game.achievementFallbackAttemptedAt) || 0,
+    achievementSyncAttemptAt: Number(game.achievementSyncAttemptAt) || 0,
+    achievementSyncError: String(game.achievementSyncError || ''),
     achievementsDetailsComplete: Boolean(detailsComplete),
     achievementsIconsComplete: Boolean(game.achievementsIconsComplete),
     achievementsAvailable: game.achievementsAvailable ?? null,
@@ -339,6 +364,10 @@ function serializeAchievementSummary(game, cleanGame = serializeGame(game)) {
     updatedAt: cleanGame.achievementsUpdatedAt,
     playtime: cleanGame.achievementsPlaytime,
     version: cleanGame.achievementSummaryVersion,
+    status: cleanGame.achievementSummaryStatus,
+    fallbackAttemptedAt: cleanGame.achievementFallbackAttemptedAt,
+    syncAttemptAt: cleanGame.achievementSyncAttemptAt,
+    syncError: cleanGame.achievementSyncError,
   };
 }
 
@@ -413,6 +442,11 @@ export async function readProfileSnapshot(steamId) {
         achievementsUpdatedAt: summary?.updatedAt ?? game.achievementsUpdatedAt,
         achievementsPlaytime: summary?.playtime ?? game.achievementsPlaytime,
         achievementSummaryVersion: summary?.version ?? game.achievementSummaryVersion,
+        achievementSummaryStatus: summary?.status ?? game.achievementSummaryStatus,
+        achievementFallbackAttemptedAt:
+          summary?.fallbackAttemptedAt ?? game.achievementFallbackAttemptedAt,
+        achievementSyncAttemptAt: summary?.syncAttemptAt ?? game.achievementSyncAttemptAt,
+        achievementSyncError: summary?.syncError ?? game.achievementSyncError,
         achievements: [],
         achievementsDetailsComplete: false,
       })
@@ -652,6 +686,33 @@ export async function writeAchievementBatch(steamId, games, trophyGroupsByAppId)
         });
       }
     }
+  }
+
+  await done;
+}
+
+export async function writeAchievementSummaryBatch(steamId, games) {
+  const id = normalizeId(steamId);
+  const db = await openDatabase();
+  const tx = db.transaction([GAME_STORE, SUMMARY_STORE], "readwrite");
+  const done = transactionDone(tx);
+  const gameStore = tx.objectStore(GAME_STORE);
+  const summaryStore = tx.objectStore(SUMMARY_STORE);
+
+  for (const game of games) {
+    const cleanGame = serializeGame(game);
+    if (!cleanGame) continue;
+    const appid = toAppId(cleanGame.appid);
+    gameStore.put({
+      ...serializeOwnedGame(cleanGame),
+      steamId: id,
+      appid,
+    });
+    summaryStore.put({
+      ...serializeAchievementSummary(game, cleanGame),
+      steamId: id,
+      appid,
+    });
   }
 
   await done;

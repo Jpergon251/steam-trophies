@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import TrophyShelf from './TrophyShelf.vue'
+import { hasKnownAchievementSummary } from '../../data/profileStats.js'
 
 const props = defineProps({
   games: { type: Array, default: () => [] },
@@ -11,9 +12,14 @@ defineEmits(['select-trophy', 'select-diamond', 'request-achievement-icons'])
 
 const tierKeys = ['bronze', 'silver', 'gold']
 
-const diamondGames = computed(() => props.games.filter((game) => game.isDiamond))
+const diamondGames = computed(() => props.games.filter((game) => {
+  if (!hasKnownAchievementSummary(game)) return false
+  const total = Number(game.achievementCount ?? game.totalAchievements) || 0
+  const unlocked = Number(game.unlockedCount ?? game.unlockedAchievements) || 0
+  return total > 0 && unlocked === total
+}))
 const tierCounts = computed(() => props.games.reduce((counts, game) => {
-  if (game.achievementSummaryVersion !== 1) return counts
+  if (!hasKnownAchievementSummary(game)) return counts
   counts.bronze += Number(game.tierCounts?.bronze) || 0
   counts.silver += Number(game.tierCounts?.silver) || 0
   counts.gold += Number(game.tierCounts?.gold) || 0
@@ -40,7 +46,7 @@ function loadWindow(tier, start, end) {
       :label="$t(`profile.cabinet.${key}`)"
       :total-count="tierCounts[key]"
       :load-window="(start, end) => loadWindow(key, start, end)"
-      :loading="status !== 'success'"
+      :loading="status === 'loading'"
       @select="$emit('select-trophy', $event)"
       @request-achievement-icons="$emit('request-achievement-icons', $event)"
     />
@@ -48,7 +54,7 @@ function loadWindow(tier, start, end) {
       tier="diamond"
       :label="$t('profile.cabinet.diamond')"
       :trophies="diamondGames"
-      :loading="status !== 'success'"
+      :loading="status === 'loading'"
       diamonds
       @select-diamond="$emit('select-diamond', $event)"
     />
