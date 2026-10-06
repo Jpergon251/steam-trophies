@@ -33,7 +33,10 @@
     position: relative;
     z-index: $z-content;
     width: fit-content;
+    min-height: $button-height-md;
+    align-items: center;
     font-size: $font-size-sm;
+    pointer-events: auto;
   }
 
   &__avatar-frame {

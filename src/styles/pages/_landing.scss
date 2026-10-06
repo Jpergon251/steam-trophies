@@ -66,6 +66,14 @@
   &__topline {
     min-height: $header-height;
     animation: landing-arrive $duration-normal $ease-expressive both;
+
+    &--profile {
+      position: relative;
+      top: auto;
+      right: auto;
+      left: auto;
+      flex: 0 0 $header-height;
+    }
   }
 
   &__wordmark {
@@ -73,7 +81,7 @@
     align-items: center;
     gap: $space-3;
     color: $color-text-primary;
-    font-size: $font-size-xs;
+    font-size: $font-size-sm;
     font-weight: $font-weight-medium;
     letter-spacing: $letter-spacing-wider;
     text-decoration: none;
@@ -92,9 +100,9 @@
   }
 
   &__edition {
-    color: $color-text-tertiary;
+    color: $color-text-secondary;
     font-family: $font-mono;
-    font-size: $font-size-xs;
+    font-size: $font-size-sm;
     letter-spacing: $letter-spacing-wide;
   }
 
@@ -116,8 +124,8 @@
     align-items: center;
     gap: $space-3;
     margin: 0 0 $space-6;
-    color: $color-text-tertiary;
-    font-size: $font-size-xs;
+    color: $color-text-secondary;
+    font-size: $font-size-sm;
     font-weight: $font-weight-medium;
     letter-spacing: $letter-spacing-uppercase;
     text-transform: uppercase;
@@ -181,7 +189,7 @@
     align-items: center;
     gap: $space-2;
     color: $color-text-tertiary;
-    font-size: $font-size-xs;
+    font-size: $font-size-sm;
     letter-spacing: $letter-spacing-wide;
     white-space: nowrap;
   }
@@ -247,6 +255,8 @@
       min-height: $space-16;
     }
 
+    &__topline--profile { top: $space-4; }
+
     &__content {
       padding-top: $space-12;
       padding-bottom: $space-12;
@@ -254,7 +264,7 @@
 
     &__eyebrow {
       margin-bottom: $space-4;
-      font-size: 0.625rem;
+      font-size: $font-size-xs;
     }
 
     &__title {
@@ -275,11 +285,11 @@
     &__tier {
       flex-direction: column;
       gap: $space-1;
-      font-size: 0.625rem;
+      font-size: $font-size-xs;
     }
 
     &__footer {
-      font-size: 0.625rem;
+      font-size: $font-size-xs;
     }
   }
 }
@@ -295,7 +305,7 @@
     }
 
     &__tier {
-      font-size: 0.5625rem;
+      font-size: $font-size-xs;
     }
   }
 }

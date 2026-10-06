@@ -1,5 +1,5 @@
 <template>
-  <header class="landing__topline">
+  <header v-if="isLandingPage || isProfilePage" class="landing__topline" :class="{ 'landing__topline--profile': isProfilePage }">
     <RouterLink class="landing__wordmark" :to="{ name: 'home' }" :aria-label="$t('header.home')">
       <span class="landing__mark" aria-hidden="true">
         <Trophy :size="16" :stroke-width="1.6" />
@@ -10,7 +10,7 @@
     <span class="landing__edition">{{ $t('header.edition') }}</span>
 
     <div class="landing__topline-actions">
-      <div v-if="currentSteamId" class="landing__refresh-group">
+      <div v-if="isProfilePage && canRefresh" class="landing__refresh-group">
         <button
           class="landing__refresh"
           :aria-label="$t('header.refreshAria')"
@@ -27,19 +27,20 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import { useSteamProfilesStore } from '../../stores/steamProfiles.js'
 import { Trophy } from '@lucide/vue'
 import LanguageSelector from './LanguageSelector.vue'
 
 const store = useSteamProfilesStore()
-
-// Determine current steamId – pick first available profile in state
-const currentSteamId = computed(() => {
-  const ids = Object.keys(store.profiles)
-  return ids.length ? ids[0] : null
-})
+const route = useRoute()
+const isLandingPage = computed(() => route.name === 'home')
+const isProfilePage = computed(() => route.name === 'profile')
+const currentSteamId = computed(() => isProfilePage.value ? String(route.params.steamId || '') : '')
+const profileLoaded = computed(() => Boolean(currentSteamId.value && store.profileFor(currentSteamId.value)))
+const syncActive = computed(() => Boolean(currentSteamId.value && store.syncs[currentSteamId.value]?.active))
+const canRefresh = computed(() => profileLoaded.value && !syncActive.value)
 
 const countdown = ref(60)
 let intervalId = null
@@ -52,22 +53,31 @@ const formattedCountdown = computed(() => {
 
 function manualRefresh() {
   const id = currentSteamId.value
-  if (!id) return
-  store.syncProfile(id).catch(() => {})
+  if (!canRefresh.value || !id) return
   countdown.value = 60
+  store.syncProfile(id).catch(() => {})
 }
 
 function tick() {
-  if (!currentSteamId.value) return
-  if (countdown.value <= 0) {
+  if (!canRefresh.value) return
+  if (countdown.value <= 1) {
     manualRefresh()
   } else {
     countdown.value--
   }
 }
 
+watch([currentSteamId, canRefresh], ([id, ready]) => {
+  countdown.value = 60
+  if (intervalId) {
+    clearInterval(intervalId)
+    intervalId = null
+  }
+  if (ready && id) intervalId = setInterval(tick, 1000)
+})
+
 onMounted(() => {
-  intervalId = setInterval(tick, 1000)
+  if (canRefresh.value) intervalId = setInterval(tick, 1000)
 })
 
 onBeforeUnmount(() => {

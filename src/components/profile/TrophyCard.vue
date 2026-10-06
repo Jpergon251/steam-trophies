@@ -1,9 +1,12 @@
 <script setup>
+import { computed } from 'vue'
 import { LockKeyhole, Trophy } from '@lucide/vue'
 import { getTrophyTier } from '../../data/trophyTiers.js'
 
 const props = defineProps({ trophy: { type: Object, required: true } })
 defineEmits(['select'])
+const tier = () => props.trophy.tier || getTrophyTier(props.trophy.global_percent) || 'unclassified'
+const tierColor = computed(() => ({ bronze: '#e3a15d', silver: '#f0f2f4', gold: '#ffe58a', diamond: '#e2f8ff' })[tier()] || '#bfc5cc')
 const isUnlocked = () => props.trophy.achieved === true || Number(props.trophy.achieved) === 1
 </script>
 
@@ -23,7 +26,8 @@ const isUnlocked = () => props.trophy.achieved === true || Number(props.trophy.a
       :src="trophy.gameIcon"
       :alt="`${trophy.gameName} icon`"
     />
-    <span class="trophy-card__icon-wrap">
+    <span class="trophy-card__icon-wrap" :style="{ '--achievement-tint': tierColor }">
+      <span class="trophy-card__illumination" aria-hidden="true" />
       <img v-if="trophy.icon" class="trophy-card__achievement-icon" :src="trophy.icon" :alt="`${trophy.name} achievement icon`" loading="lazy" />
       <Trophy
         v-else

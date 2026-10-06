@@ -6,29 +6,17 @@ import Footer from './components/layout/Footer.vue'
 
 <template>
   <div class="app-layout">
-    <Header />
     <main class="app-main">
       <RouterView v-slot="{ Component, route }">
         <Transition name="page-transition" mode="out-in">
-          <component :is="Component" :key="route.path" />
+          <div :key="route.path">
+            <Header v-if="route.name === 'home' || route.name === 'profile'" />
+            <component :is="Component" />
+            <Footer v-if="route.name === 'home'" />
+          </div>
         </Transition>
       </RouterView>
     </main>
-    <Footer />
   </div>
 </template>
 
-<style scoped>
-.app-layout {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  min-height: 100svh;
-}
-
-.app-main {
-  display: flex;
-  flex-direction: column;
-  flex: 1 0 auto;
-}
-</style>

@@ -16,6 +16,19 @@ $color-bg-tertiary: #0d0d0d;
 $color-bg-elevated: #111111;
 $color-bg-surface: #151515;
 
+// Shared modal surfaces and motion tokens.
+$color-bg-modal: #090a0c;
+$color-overlay-modal: rgba(0, 0, 0, 0.76);
+$modal-shadow: 0 28px 88px rgba(0, 0, 0, 0.68), 0 4px 22px rgba(0, 0, 0, 0.36);
+$modal-radius: 24px;
+$modal-blur: 12px;
+$modal-duration: 380ms;
+$modal-easing: cubic-bezier(0.2, 0.8, 0.2, 1);
+$modal-tier-bronze: #e3a15d;
+$modal-tier-silver: #f0f2f4;
+$modal-tier-gold: #ffe58a;
+$modal-tier-diamond: #e2f8ff;
+
 // --- Glass ---
 
 $glass-white-01: rgba(255, 255, 255, 0.01);

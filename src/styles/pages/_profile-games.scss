@@ -343,6 +343,12 @@
   color: $color-text-primary;
   text-align: left;
   cursor: pointer;
+  animation: archive-card-arrive 520ms $ease-expressive both;
+}
+.archive-grid .archive-game {
+  @for $i from 1 through 12 {
+    &:nth-child(#{$i}) { animation-delay: #{($i - 1) * 35}ms; }
+  }
 }
 .archive-game:focus-visible {
   outline: 2px solid $trophy-diamond;
@@ -355,9 +361,11 @@
   aspect-ratio: 460 / 215;
   overflow: hidden;
   isolation: isolate;
-  border-radius: $radius-xs;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: $radius-sm;
   background: radial-gradient(ellipse, $glass-white-06, $glass-white-01);
   box-shadow: $shadow-sm;
+  transition: border-color $transition-normal, box-shadow $transition-normal, transform $transition-normal;
 }
 .archive-game__artwork > img {
   position: absolute;
@@ -406,7 +414,7 @@
   display: block;
   overflow: hidden;
   color: $color-text-primary;
-  font-size: $font-size-sm;
+  font-size: $font-size-md;
   font-weight: $font-weight-medium;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -417,14 +425,14 @@
   align-items: center;
   justify-content: space-between;
   gap: $space-2;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 10px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: $font-size-xs;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
 }
 .archive-game__progress b {
   color: $color-text-primary;
   font-family: $font-mono;
-  font-size: 10px;
+  font-size: $font-size-xs;
   font-weight: $font-weight-medium;
 }
 .archive-game__track {
@@ -442,6 +450,7 @@
   border-radius: inherit;
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 0 5px rgba(255, 255, 255, 0.22);
+  transition: width 650ms $ease-expressive;
 }
 .archive-game__track--diamond > span {
   background: linear-gradient(
@@ -452,8 +461,8 @@
   box-shadow: 0 0 7px rgba($trophy-diamond, 0.36);
 }
 .archive-game__no-trophies {
-  color: rgba(255, 255, 255, 0.68);
-  font-size: 10px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: $font-size-xs;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
 }
 .archive-game__diamond {
@@ -502,7 +511,12 @@
   font-size: 10px;
 }
 .archive-game:hover .archive-game__artwork > img {
-  transform: scale(1.025);
+  transform: scale(1.065);
+}
+.archive-game:hover .archive-game__artwork {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.38), 0 0 22px rgba(255, 255, 255, 0.045);
 }
 .archive-game:hover .archive-game__overlay {
   background:
@@ -636,8 +650,13 @@
   padding-inline: $space-1;
 }
 
+@keyframes archive-card-arrive {
+  from { transform: translateY(12px) scale(0.985); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
 @keyframes archive-pulse {
-  50% {
+ 50% {
     opacity: 0.4;
     box-shadow: 0 0 6px rgba(255, 255, 255, 0.12);
   }
@@ -729,11 +748,11 @@
     gap: $space-1;
   }
   .archive-game__name {
-    font-size: $font-size-xs;
+    font-size: $font-size-sm;
   }
   .archive-game__progress,
   .archive-game__progress b {
-    font-size: 9px;
+    font-size: $font-size-xs;
   }
   .archive-game__diamond {
     top: $space-2;

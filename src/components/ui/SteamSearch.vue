@@ -31,17 +31,12 @@
         <ArrowUpRight :size="18" :stroke-width="1.8" aria-hidden="true" />
       </button>
     </div>
-    <p
-      class="steam-search__hint"
-      aria-live="polite"
-    >
-      <template v-if="loading">{{ $t('landing.searching') }}</template>
+    <p class="steam-search__hint" aria-live="polite">
+      <template v-if="loading">{{ $t("landing.searching") }}</template>
       <template v-else-if="locale === 'es'">
         Pulsa <kbd>Enter</kbd> para explorar
       </template>
-      <template v-else>
-        Press <kbd>Enter</kbd> to explore
-      </template>
+      <template v-else> Press <kbd>Enter</kbd> to explore </template>
     </p>
   </form>
 </template>

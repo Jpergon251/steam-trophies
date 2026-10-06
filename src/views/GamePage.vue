@@ -31,12 +31,19 @@ const counts = computed(() => {
 })
 const completion = computed(() => counts.value.total ? Math.round(counts.value.unlocked / counts.value.total * 1000) / 10 : 0)
 const isDiamond = computed(() => counts.value.total > 0 && counts.value.unlocked === counts.value.total)
+const unlockedTierCounts = computed(() => {
+  const totals = { bronze: 0, silver: 0, gold: 0 }
+  achievements.value.filter(isUnlocked).forEach((achievement) => {
+    const tier = achievementTier(achievement)
+    if (totals[tier] !== undefined) totals[tier] += 1
+  })
+  return totals
+})
+const artworkStyle = computed(() => {
+  const url = game.value?.headerUrl || game.value?.coverUrl
+  return url ? { '--game-artwork': `url("${url}")` } : undefined
+})
 const hasGlobalRarity = (achievement) => achievement.global_percent !== null && achievement.global_percent !== undefined && Number.isFinite(Number(achievement.global_percent))
-const rarestAchievement = computed(() => achievements.value.reduce((rarest, achievement) => {
-  if (!hasGlobalRarity(achievement)) return rarest
-  return !rarest || Number(achievement.global_percent) < Number(rarest.global_percent) ? achievement : rarest
-}, null))
-
 const activeFilter = ref('all')
 const search = ref('')
 const sortBy = ref('steam')
@@ -125,10 +132,6 @@ watch(appid, () => {
   <main class="game-page">
     <div class="game-page__ambient" aria-hidden="true" />
     <div class="game-page__shell">
-      <RouterLink class="game-page__back" :to="{ name: 'profile', params: { steamId }, query: backQuery }">
-        <ArrowLeft :size="16" aria-hidden="true" /> {{ $t('game.backToGames') }}
-      </RouterLink>
-
       <div v-if="isLoading" class="game-page__state" role="status">
         {{ $t('game.loadingArchive') }}
       </div>
@@ -143,41 +146,57 @@ watch(appid, () => {
       </section>
 
       <template v-else>
-        <header class="game-archive-header" :style="game.headerUrl ? { '--game-artwork': `url(${game.headerUrl})` } : game.coverUrl ? { '--game-artwork': `url(${game.coverUrl})` } : undefined">
-          <div class="game-archive-header__content">
-            <p class="game-page__eyebrow">{{ $t('game.eyebrow', { name: profile?.personaname || 'STEAM PLAYER' }) }}</p>
-            <h1>{{ game.name }}</h1>
-            <p class="game-archive-header__playtime" v-if="game.playtime_forever">
-              {{ $t('game.hoursPlayed', { hours: Math.round(game.playtime_forever / 60) }) }}
-            </p>
-            <div class="game-archive-header__status">
-              <span v-if="isDiamond" class="game-archive-header__diamond"><Diamond :size="15" /> {{ $t('game.diamondAchieved') }}</span>
-              <span v-else>{{ $t('game.achievementsRemaining', { count: counts.locked }) }}</span>
-              <span v-if="sync?.active" class="game-archive-header__updating">{{ $t('game.updatingAchievements') }}</span>
+        <header class="game-archive-header" :class="{ 'game-archive-header--diamond': isDiamond }" :style="artworkStyle">
+          <div class="game-archive-header__backdrop" aria-hidden="true" />
+          <div class="game-archive-header__inner">
+            <RouterLink class="game-page__back" :to="{ name: 'profile', params: { steamId }, query: backQuery }">
+              <ArrowLeft :size="17" aria-hidden="true" /> {{ $t('game.backToGames') }}
+            </RouterLink>
+            <div class="game-archive-header__content">
+              <p class="game-page__eyebrow">{{ $t('game.eyebrow', { name: profile?.personaname || 'STEAM PLAYER' }) }}</p>
+              <h1>{{ game.name }}</h1>
+              <div class="game-archive-header__completion">
+                <strong>{{ completion }}<span>%</span></strong>
+                <div class="game-archive-header__completion-info">
+                  <span v-if="isDiamond" class="game-archive-header__diamond"><Diamond :size="15" /> {{ $t('game.diamondAchieved') }}</span>
+                  <span v-else>{{ $t('game.achievementsRemaining', { count: counts.locked }) }}</span>
+                  <span class="game-archive-header__count">{{ counts.unlocked }} / {{ counts.total }} {{ $t('game.achievementsShort') }}</span>
+                </div>
+              </div>
+              <div class="game-archive-header__progress" role="progressbar" :aria-valuenow="completion" aria-valuemin="0" aria-valuemax="100" :aria-label="`${game.name} achievement completion`">
+                <span :class="{ 'is-diamond': isDiamond }" :style="{ width: `${completion}%` }" />
+              </div>
+              <p v-if="sync?.active" class="game-archive-header__updating">{{ $t('game.updatingAchievements') }}</p>
+              <div v-if="isDiamond" class="game-diamond-exhibit" :aria-label="$t('game.diamondAchieved')">
+                <span class="game-diamond-exhibit__aura" aria-hidden="true" />
+                <span class="game-diamond-exhibit__medal" aria-hidden="true"><Diamond :size="24" :stroke-width="1.35" /></span>
+                <span class="game-diamond-exhibit__copy">
+                  <strong>{{ $t('game.diamondTrophy') }}</strong>
+                  <small>{{ $t('game.perfectSet') }}</small>
+                </span>
+              </div>
+              <p v-if="game.playtime_forever" class="game-archive-header__playtime">{{ $t('game.hoursPlayed', { hours: Math.round(game.playtime_forever / 60) }) }}</p>
             </div>
-            <div class="game-archive-header__progress" role="progressbar" :aria-valuenow="completion" aria-valuemin="0" aria-valuemax="100" :aria-label="`${game.name} achievement completion`">
-              <span :class="{ 'is-diamond': isDiamond }" :style="{ width: `${completion}%` }" />
-            </div>
-            <div v-if="isDiamond" class="game-diamond-exhibit" aria-label="Diamond trophy achieved">
-              <span class="game-diamond-exhibit__aura" aria-hidden="true" />
-              <span class="game-diamond-exhibit__medal" aria-hidden="true">
-                <Diamond :size="24" :stroke-width="1.35" />
-                <span class="game-diamond-exhibit__seal"><Diamond :size="9" fill="currentColor" /></span>
-              </span>
-              <span class="game-diamond-exhibit__copy">
-                <strong>{{ $t('game.diamondTrophy') }}</strong>
-                <small>{{ $t('game.perfectSet') }}</small>
-              </span>
-            </div>
-          </div>
-          <div class="game-archive-header__stats">
-            <div><strong>{{ counts.unlocked }}</strong><span>{{ $t('game.stats.unlocked') }}</span></div>
-            <div><strong>{{ counts.total }}</strong><span>{{ $t('game.stats.total') }}</span></div>
-            <div><strong>{{ counts.locked }}</strong><span>{{ $t('game.stats.locked') }}</span></div>
-            <div><strong>{{ completion }}%</strong><span>{{ $t('game.stats.complete') }}</span></div>
-            <div v-if="rarestAchievement"><strong>{{ Number(rarestAchievement.global_percent).toFixed(1) }}%</strong><span>{{ $t('game.stats.rarest') }}</span></div>
           </div>
         </header>
+
+        <section class="game-progress-summary" :aria-label="$t('game.progress')">
+          <div class="game-progress-summary__lead">
+            <span class="game-page__eyebrow">{{ $t('game.progress') }}</span>
+            <strong>{{ counts.unlocked }} <span>/ {{ counts.total }}</span></strong>
+            <span class="game-progress-summary__caption">{{ $t('game.stats.unlocked') }}</span>
+          </div>
+          <div class="game-progress-summary__tiers" :aria-label="$t('game.trophyCollection')">
+            <div class="game-tier game-tier--bronze"><span class="game-tier__medal" aria-hidden="true">●</span><strong>{{ unlockedTierCounts.bronze }}</strong><span>{{ $t('game.tiers.bronze') }}</span></div>
+            <div class="game-tier game-tier--silver"><span class="game-tier__medal" aria-hidden="true">●</span><strong>{{ unlockedTierCounts.silver }}</strong><span>{{ $t('game.tiers.silver') }}</span></div>
+            <div class="game-tier game-tier--gold"><span class="game-tier__medal" aria-hidden="true">●</span><strong>{{ unlockedTierCounts.gold }}</strong><span>{{ $t('game.tiers.gold') }}</span></div>
+            <div v-if="isDiamond" class="game-tier game-tier--diamond"><Diamond :size="19" aria-hidden="true"/><strong>1</strong><span>{{ $t('game.tiers.diamond') }}</span></div>
+          </div>
+          <div v-if="game.playtime_forever" class="game-progress-summary__playtime">
+            <span class="game-page__eyebrow">{{ $t('game.playtime') }}</span>
+            <strong>{{ $t('game.hoursPlayed', { hours: Math.round(game.playtime_forever / 60) }) }}</strong>
+          </div>
+        </section>
 
         <section class="achievement-archive" aria-labelledby="achievement-archive-title">
           <header class="achievement-archive__heading">
@@ -242,8 +261,8 @@ watch(appid, () => {
               <div class="achievement-row__body">
                 <div class="achievement-row__title-line">
                   <h3>{{ achievement.name || achievement.apiname }}</h3>
-                  <span v-if="achievement.global_percent != null" class="achievement-row__rarity">
-                    {{ $t('game.globalRarity', { percent: Number(achievement.global_percent).toFixed(2) }) }}
+                  <span v-if="hasGlobalRarity(achievement)" class="achievement-row__rarity">
+                    {{ Number(achievement.global_percent).toFixed(2) }}% · {{ $t(`game.tiers.${achievementTier(achievement)}`) }}
                   </span>
                 </div>
                 <p>{{ achievement.description || $t('game.noDescription') }}</p>
@@ -254,8 +273,8 @@ watch(appid, () => {
                   <span v-else class="achievement-row__locked-label">
                     <LockKeyhole :size="13" /> {{ $t('game.stillLocked') }}
                   </span>
-                  <span v-if="achievement.global_percent != null" class="achievement-row__rarity-mobile">
-                    {{ $t('game.globalRarityLong', { percent: Number(achievement.global_percent).toFixed(2) }) }}
+                  <span v-if="hasGlobalRarity(achievement)" class="achievement-row__rarity-mobile">
+                    {{ Number(achievement.global_percent).toFixed(2) }}% · {{ $t(`game.tiers.${achievementTier(achievement)}`) }}
                   </span>
                 </div>
               </div>

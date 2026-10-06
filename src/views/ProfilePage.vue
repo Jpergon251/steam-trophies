@@ -22,6 +22,7 @@ const steamId = computed(() => String(route.params.steamId || ''))
 const profile = computed(() => activeSteamId.value === steamId.value ? steamStore.profileFor(steamId.value) : null)
 const games = computed(() => activeSteamId.value === steamId.value ? steamStore.gamesFor(steamId.value) : [])
 const trophyCollection = computed(() => activeSteamId.value === steamId.value ? steamStore.trophiesFor(steamId.value) : [])
+const gameByAppId = computed(() => new Map(games.value.map((game) => [String(game.appid), game])))
 const gamesStatus = computed(() => steamStore.errorFor(steamId.value) && !games.value.length ? 'error' : profile.value ? 'success' : 'loading')
 const syncState = computed(() => steamStore.syncs[steamId.value] || null)
 const collectionStatus = computed(() => {
@@ -193,7 +194,7 @@ async function openGame({ game, context }) {
               :games="games"
               :status="collectionStatus"
               :progress="collectionProgress"
-              @select-trophy="selectedTrophy = $event"
+              @select-trophy="selectedTrophy = { ...$event, game: gameByAppId.get(String($event.appid)) || null }"
               @select-diamond="selectedTrophy = { isDiamond: true, game: $event, name: $event.name }"
             />
             <GamesCollection
