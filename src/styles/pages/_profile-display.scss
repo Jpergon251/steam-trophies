@@ -201,16 +201,16 @@
   position: relative;
 
   display: flex;
-  flex: 0 0 142px;
-  min-width: 142px;
-  min-height: 220px;
+  flex: 0 0 208px;
+  min-width: 208px;
+  min-height: 286px;
 
   flex-direction: column;
   align-items: center;
   justify-content: center;
 
-  gap: $space-1;
-  padding: $space-2;
+  gap: $space-2;
+  padding: $space-3;
 
   border: 0;
   border-radius: $radius-md;
@@ -234,8 +234,8 @@
     position: absolute;
     z-index: 0;
 
-    width: 110px;
-    height: 110px;
+    width: 150px;
+    height: 150px;
 
     border-radius: $radius-circle;
 
@@ -255,9 +255,9 @@
     z-index: 1;
 
     display: grid;
-    width: 104px;
-    height: 104px;
-    flex: 0 0 104px;
+    width: 112px;
+    height: 112px;
+    flex: 0 0 112px;
     place-items: center;
     overflow: hidden;
     border: 1px solid color-mix(in srgb, var(--modal-tier) 25%, transparent);
@@ -268,35 +268,43 @@
 
     &::before {
       position: absolute;
-      inset: 7px;
+      inset: 9px;
       border: 1px solid rgba(255, 255, 255, 0.065);
       border-radius: inherit;
       content: "";
     }
   }
 
-  &__trophy {
+  &__emblem {
     position: relative;
     z-index: 1;
-    width: 78px;
-    height: 78px;
-    color: var(--modal-tier);
-    filter: drop-shadow(0 0 11px var(--modal-tier-glow));
-  }
-
-  &__illumination {
-    display: none;
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    margin-bottom: $space-1;
   }
 
   &__achievement-icon {
     position: relative;
     z-index: 1;
-    width: 76%;
-    height: 76%;
+    width: 100px;
+    height: 100px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 50%;
     object-fit: cover;
     filter: drop-shadow(0 12px 23px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 13px var(--modal-tier-glow));
+  }
+
+  &__icon-wrap--locked &__achievement-icon {
+    filter: grayscale(1) brightness(0.64) drop-shadow(0 6px 12px rgba(0, 0, 0, 0.36));
+    opacity: 0.78;
+  }
+
+  &__fallback {
+    position: relative;
+    z-index: 1;
+    color: var(--modal-tier);
+    filter: drop-shadow(0 0 11px var(--modal-tier-glow));
   }
 
   &__icon-wrap--locked {
@@ -305,15 +313,41 @@
     box-shadow: inset 0 1px 8px rgba(255, 255, 255, 0.04);
   }
 
-  &__icon-wrap--locked &__achievement-icon {
-    filter: grayscale(1) brightness(0.64) drop-shadow(0 6px 12px rgba(0, 0, 0, 0.36));
-    opacity: 0.78;
-  }
-
-  &__trophy--locked {
+  &__fallback--locked {
     color: $color-text-secondary;
     filter: grayscale(1);
     opacity: 0.72;
+  }
+
+  &__tier-badge {
+    position: absolute;
+    z-index: 3;
+    top: -7px;
+    right: -19px;
+    display: grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--modal-tier) 45%, transparent);
+    border-radius: 50%;
+    background: $color-bg-primary;
+    color: var(--modal-tier);
+    filter: drop-shadow(0 0 8px var(--modal-tier-glow));
+  }
+
+  &__lock {
+    position: absolute;
+    z-index: 4;
+    right: 2px;
+    bottom: 2px;
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border: 1px solid $color-bg-primary;
+    border-radius: 50%;
+    background: $color-bg-elevated;
+    color: $color-text-tertiary;
   }
 
   &--locked {
@@ -323,20 +357,22 @@
 
 
   &__game-icon {
-    position: absolute;
-    z-index: 2;
-
-    top: $space-1;
-    right: 0;
-
     width: 24px;
     height: 24px;
-
+    flex: 0 0 24px;
     border: 1px solid $glass-white-10;
     border-radius: $radius-xs;
-
     object-fit: cover;
-    opacity: 0.8;
+  }
+
+  &__game {
+    z-index: 1;
+    display: flex;
+    max-width: 100%;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: $space-2;
   }
 
   &__rarity {
@@ -344,7 +380,7 @@
 
     color: $color-text-tertiary;
     font-family: $font-mono;
-    font-size: $font-size-sm;
+    font-size: $font-size-md;
   }
 
   &--bronze &__rarity { color: $trophy-bronze-light; }
@@ -358,33 +394,32 @@
   strong {
     z-index: 1;
 
-    display: block;
-    width: 100%;
+    min-width: 0;
 
     overflow: hidden;
 
     color: rgba(255, 255, 255, 0.68);
 
-    font-size: $font-size-sm;
+    font-size: $font-size-md;
     font-weight: $font-weight-medium;
 
     text-align: center;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   &__game-name {
-    z-index: 1;
-    display: -webkit-box;
-    width: 100%;
+    display: block;
+    min-width: 0;
     overflow: hidden;
     color: $color-text-secondary;
-    font-size: $font-size-xs;
+    font-size: $font-size-sm;
     line-height: $line-height-normal;
-    text-align: center;
+    text-align: left;
     text-overflow: ellipsis;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    white-space: nowrap;
   }
 }
 
@@ -723,7 +758,7 @@
   .trophy-shelf__track {
   justify-content: flex-start;
 
-  gap: $space-3;
+  gap: clamp(28px, 3vw, 44px);
 
   padding-inline: $space-6;
 }
@@ -735,9 +770,9 @@
 
 .trophy-display-stage--flat .trophy-shelf__rail .trophy-card {
   z-index: auto;
-  flex-basis: 142px;
-  width: 142px;
-  min-height: 220px;
+  flex-basis: 208px;
+  width: 208px;
+  min-height: 286px;
   opacity: 1;
   filter: none;
   transform: none;
@@ -757,7 +792,13 @@
     padding-inline: 34px;
   }
   .trophy-shelf__track {
-    gap: clamp(12px, 4vw, 32px);
+    gap: clamp(22px, 4vw, 36px);
+  }
+
+  .trophy-display-stage--flat .trophy-shelf__rail .trophy-card {
+    flex-basis: 196px;
+    width: 196px;
+    min-height: 276px;
   }
 
   .trophy-display-stage--diamond .diamond-trophy {
@@ -794,9 +835,36 @@
   .trophy-shelf__track {
     justify-content: flex-start;
 
-    gap: 8px;
+    gap: 22px;
 
-    padding-inline: max(16px, calc((100% - 190px) / 2));
+    padding-inline: max(16px, calc((100% - 196px) / 2));
+  }
+
+  .trophy-display-stage--flat .trophy-shelf__rail .trophy-card {
+    flex-basis: 184px;
+    width: 184px;
+    min-height: 264px;
+  }
+
+  .trophy-display-stage--flat .trophy-card__icon-wrap {
+    width: 100px;
+    height: 100px;
+    flex-basis: 100px;
+  }
+
+  .trophy-display-stage--flat .trophy-card__achievement-icon {
+    width: 88px;
+    height: 88px;
+  }
+
+  .trophy-display-stage--flat .trophy-card__tier-badge {
+    width: 44px;
+    height: 44px;
+  }
+
+  .trophy-display-stage--flat .trophy-card__tier-badge svg {
+    width: 29px;
+    height: 29px;
   }
 
   .trophy-display-stage__arrow {

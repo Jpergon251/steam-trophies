@@ -5,6 +5,7 @@ import random
 import re
 import time
 from contextlib import asynccontextmanager
+from urllib.parse import quote, urlparse
 from urllib.parse import urlparse
 
 import httpx
@@ -66,7 +67,11 @@ def _cache_ttl(endpoint: str) -> int:
         return settings.cache_profile_ttl
     if "GetOwnedGames" in endpoint:
         return settings.cache_games_ttl
-    if "GetPlayerAchievements" in endpoint or "GetTopAchievementsForGames" in endpoint:
+    if (
+        "GetPlayerAchievements" in endpoint
+        or "GetTopAchievementsForGames" in endpoint
+        or "GetSchemaForGame" in endpoint
+    ):
         return settings.cache_achievements_ttl
     if "GetGlobalAchievementPercentages" in endpoint:
         return settings.cache_global_achievements_ttl
@@ -348,8 +353,8 @@ def _normalize_top_summary(app_id: int, owned_game: dict, top_game: dict | None)
             "description": item.get("desc") or "",
             "achieved": True,
             "unlocktime": None,
-            "icon": item.get("icon") or "",
-            "icongray": item.get("icon_gray") or "",
+            "icon": _top_achievement_icon_url(app_id, item.get("icon")),
+            "icongray": _top_achievement_icon_url(app_id, item.get("icon_gray")),
             "global_percent": percent,
             "hidden": item.get("hidden"),
         })
@@ -367,6 +372,22 @@ def _normalize_top_summary(app_id: int, owned_game: dict, top_game: dict | None)
         "details_complete": False,
         "source": "top",
     }
+
+
+def _top_achievement_icon_url(app_id: int, icon: object) -> str:
+    if not isinstance(icon, str) or not icon.strip():
+        return ""
+    icon = icon.strip()
+    parsed = urlparse(icon)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return icon
+    filename = quote(icon.lstrip("/"), safe="/")
+    if not filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+        filename = f"{filename}.jpg"
+    return (
+        "https://media.steampowered.com/steamcommunity/public/images/apps/"
+        f"{app_id}/{filename}"
+    )
 
 
 async def _legacy_achievement_summary(steam_id: str, app_id: int, owned_game: dict):
@@ -389,6 +410,7 @@ async def _legacy_achievement_summary(steam_id: str, app_id: int, owned_game: di
         "unlocked_count": unlocked_count,
         "available": result.get("available", False),
         "details_complete": True,
+        "icons_complete": result.get("icons_complete", False),
         "source": "legacy_fallback",
         "reason": result.get("reason"),
     }
@@ -498,20 +520,61 @@ async def _load_player_achievements(
                     }
         raise
 
-    global_percentages_available = True
-    try:
-        global_data = await steam_request(
+    global_data, schema_data = await asyncio.gather(
+        steam_request(
             "ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/",
             {"gameid": app_id},
-        )
-    except (httpx.HTTPError, ValueError) as error:
-        global_percentages_available = False
+        ),
+        steam_request(
+            "ISteamUserStats/GetSchemaForGame/v2/",
+            {"appid": app_id, "l": "english"},
+        ),
+        return_exceptions=True,
+    )
+    global_percentages_available = not isinstance(global_data, BaseException)
+    if not global_percentages_available:
         logger.debug(
             "Steam global achievement percentages unavailable for app %s (%s).",
             app_id,
-            type(error).__name__,
+            type(global_data).__name__,
         )
         global_data = {}
+
+    schema_game = (
+        schema_data.get("game")
+        if isinstance(schema_data, dict)
+        else None
+    )
+    schema_stats = (
+        schema_game.get("availableGameStats")
+        if isinstance(schema_game, dict)
+        else None
+    )
+    schema_achievements = (
+        schema_stats.get("achievements")
+        if isinstance(schema_stats, dict)
+        else None
+    )
+    icons_complete = isinstance(schema_achievements, list)
+    if not icons_complete:
+        schema_status = (
+            schema_data.response.status_code
+            if isinstance(schema_data, httpx.HTTPStatusError)
+            else "n/a"
+        )
+        logger.warning(
+            "Steam achievement icon schema unavailable appid=%s status=%s reason=%s",
+            app_id,
+            schema_status,
+            type(schema_data).__name__,
+        )
+        schema_achievements = []
+
+    schema_by_name = {
+        item.get("name"): item
+        for item in schema_achievements
+        if isinstance(item, dict) and item.get("name")
+    }
 
     global_achievements = {
         item.get("name"): item.get("percent")
@@ -524,6 +587,13 @@ async def _load_player_achievements(
     achievements = player_response.get("achievements", [])
     for achievement in achievements:
         achievement["global_percent"] = global_achievements.get(achievement.get("apiname"))
+        schema_item = schema_by_name.get(achievement.get("apiname"))
+        if schema_item:
+            achievement["name"] = achievement.get("name") or schema_item.get("displayName")
+            achievement["description"] = achievement.get("description") or schema_item.get("description")
+            achievement["icon"] = achievement.get("icon") or schema_item.get("icon")
+            achievement["icongray"] = achievement.get("icongray") or schema_item.get("icongray")
+            achievement["hidden"] = schema_item.get("hidden")
 
     return {
         "game": {
@@ -533,6 +603,7 @@ async def _load_player_achievements(
         "achievements": achievements,
         "achievement_count": len(achievements),
         "available": bool(player_response.get("success")),
+        "icons_complete": icons_complete,
         "_short_cache": not global_percentages_available,
     }
 

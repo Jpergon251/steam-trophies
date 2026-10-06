@@ -14,6 +14,7 @@ const modalRoot = ref(null);
 const closeButton = ref(null);
 const shineKey = ref(0);
 const shineActive = ref(false);
+const iconFailed = ref(false);
 let previousFocus = null;
 let shineTimer = 0;
 let shineResetTimer = 0;
@@ -58,6 +59,7 @@ function handleKey(event) {
 watch(() => props.trophy, async (trophy, previousTrophy) => {
   clearShineTimers();
   shineActive.value = false;
+  iconFailed.value = false;
   if (!trophy) {
     previousFocus?.focus?.();
     previousFocus = null;
@@ -135,8 +137,13 @@ onBeforeUnmount(() => {
 
       <template v-else>
         <div class="trophy-modal__piece" :class="[`trophy-modal__piece--${tier || 'unclassified'}`, `trophy-tier--${tier || 'unclassified'}`, { 'trophy-modal__piece--locked': !isUnlocked }]">
-          <img v-if="trophy.icon" class="trophy-modal__achievement-image" :src="trophy.icon" :alt="`${trophy.name} achievement icon`" />
-          <Trophy v-else class="trophy-modal__trophy-icon" :class="`trophy-modal__trophy-icon--${tier || 'unclassified'}`" :size="150" :stroke-width="1.1" aria-hidden="true" />
+          <Trophy
+            class="trophy-modal__trophy-icon"
+            :class="`trophy-modal__trophy-icon--${tier || 'unclassified'}`"
+            :size="150"
+            :stroke-width="1.1"
+            aria-hidden="true"
+          />
           <span
             :key="shineKey"
             class="trophy-modal__shine"
@@ -145,7 +152,16 @@ onBeforeUnmount(() => {
           />
         </div>
         <p class="trophy-modal__eyebrow">{{ $t('profile.modal.shelfTier', { tier: $t(`profile.cabinet.${tier || 'unclassified'}`) }) }}</p>
-        <h2 id="trophy-modal-title">{{ trophy.name }}</h2>
+        <div class="trophy-modal__achievement-title">
+          <img
+            v-if="trophy.icon && !iconFailed"
+            class="trophy-modal__achievement-image"
+            :src="trophy.icon"
+            :alt="`${trophy.name} achievement icon`"
+            @error="iconFailed = true"
+          />
+          <h2 id="trophy-modal-title">{{ trophy.name }}</h2>
+        </div>
         <div class="trophy-modal__game">
           <img v-if="trophy.gameIcon" :src="trophy.gameIcon" :alt="`${trophy.gameName} icon`" />
           <strong>{{ trophy.gameName }}</strong>

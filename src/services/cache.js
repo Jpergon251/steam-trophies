@@ -246,6 +246,7 @@ export function serializeGame(game) {
     fallbackUrl: String(game.fallbackUrl || ''),
     achievements,
     achievementsDetailsComplete: Boolean(detailsComplete),
+    achievementsIconsComplete: Boolean(game.achievementsIconsComplete),
     achievementsAvailable: game.achievementsAvailable ?? null,
     achievementCount,
     totalAchievements: achievementCount,
@@ -327,6 +328,7 @@ export async function readProfileSnapshot(steamId) {
       available: record.available !== false,
       cachedAt: Number(record.cachedAt) || 0,
       detailsComplete: record.detailsComplete ?? true,
+      iconsComplete: record.iconsComplete ?? false,
     };
   }
 
@@ -341,6 +343,7 @@ export async function readProfileSnapshot(steamId) {
         available: game.achievementsAvailable !== false,
         cachedAt: Number(game.achievementsUpdatedAt || game.cachedAt) || 0,
         detailsComplete: game.achievementsDetailsComplete ?? true,
+        iconsComplete: game.achievementsIconsComplete ?? false,
       };
     }
   }
@@ -357,6 +360,7 @@ export async function readProfileSnapshot(steamId) {
       achievementsAvailable: available,
       achievementsUpdatedAt: updatedAt,
       achievementsDetailsComplete: ach?.detailsComplete ?? game.achievementsDetailsComplete,
+      achievementsIconsComplete: ach?.iconsComplete ?? game.achievementsIconsComplete,
     });
   }).filter(Boolean);
 
@@ -472,7 +476,13 @@ export async function writeGame(steamId, game) {
 export async function writeAchievements(
   steamId,
   appid,
-  { achievements, available, cachedAt = Date.now(), detailsComplete = true },
+  {
+    achievements,
+    available,
+    cachedAt = Date.now(),
+    detailsComplete = true,
+    iconsComplete = false,
+  },
 ) {
   const id = normalizeId(steamId);
   const cleanAchievements = Array.isArray(achievements)
@@ -487,6 +497,7 @@ export async function writeAchievements(
     achievements: cleanAchievements,
     available: available !== false,
     detailsComplete: Boolean(detailsComplete),
+    iconsComplete: Boolean(iconsComplete),
     cachedAt: Number(cachedAt) || Date.now(),
   });
   await done;

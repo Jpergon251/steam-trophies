@@ -14,7 +14,7 @@ const props = defineProps({
   compact: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["select", "select-diamond"]);
+const emit = defineEmits(["select", "select-diamond", "request-achievement-icons"]);
 
 const rail = ref(null);
 const track = ref(null);
@@ -29,7 +29,7 @@ const afterSpacerWidth = ref(0);
 const railWidth = ref(0);
 const railPaddingStart = ref(0);
 const itemGap = ref(0);
-const cardWidth = 142;
+const cardWidth = ref(208);
 
 const isDiamondLoop = computed(
   () => props.diamonds && props.trophies.length > 2,
@@ -148,7 +148,7 @@ function updateDiamondScales(metrics = measureDiamondScaleMetrics()) {
 
 function updateVirtualWindow() {
   const count = props.trophies.length;
-  const stride = cardWidth + itemGap.value;
+  const stride = cardWidth.value + itemGap.value;
 
   if (!rail.value || !count || stride <= 0) {
     virtualStart.value = 0;
@@ -185,6 +185,8 @@ function measureVirtualRail() {
   if (!rail.value || !track.value) return;
 
   const styles = getComputedStyle(track.value);
+  const trophyCard = track.value.querySelector(".trophy-card");
+  if (trophyCard) cardWidth.value = trophyCard.getBoundingClientRect().width;
   railWidth.value = rail.value.clientWidth;
   railPaddingStart.value = Number.parseFloat(styles.paddingInlineStart) || 0;
   itemGap.value = Number.parseFloat(styles.columnGap) || 0;
@@ -806,6 +808,7 @@ onBeforeUnmount(() => {
                 $event.tier ||
                 'bronze',
             })"
+            @request-achievement-icons="emit('request-achievement-icons', $event)"
           />
         </div>
       </div>

@@ -86,6 +86,9 @@ function deriveGame(game, achievements = [], available = null, updatedAt = 0, su
   const detailsComplete = summary.detailsComplete
     ?? game.achievementsDetailsComplete
     ?? Boolean(updatedAt && available !== null)
+  const iconsComplete = summary.iconsComplete
+    ?? game.achievementsIconsComplete
+    ?? false
   const achievementCount = detailsComplete
     ? normalizedAchievements.length
     : Number(summary.achievementCount ?? game.achievementCount ?? game.totalAchievements) || 0
@@ -119,6 +122,7 @@ function deriveGame(game, achievements = [], available = null, updatedAt = 0, su
     ...getArtUrls(game),
     achievements: normalizedAchievements,
     achievementsDetailsComplete: Boolean(detailsComplete),
+    achievementsIconsComplete: Boolean(iconsComplete),
     achievementsAvailable: available == null ? null : available !== false,
     achievementCount,
     totalAchievements: achievementCount,
@@ -152,6 +156,7 @@ function fromCache(game) {
       achievementCount: game.achievementCount,
       unlockedCount: game.unlockedCount,
       detailsComplete: game.achievementsDetailsComplete,
+      iconsComplete: game.achievementsIconsComplete,
     },
   )
 }
@@ -170,6 +175,7 @@ function makeLibraryGame(rawGame, previous) {
     achievementCount: previous?.achievementCount,
     unlockedCount: previous?.unlockedCount,
     detailsComplete: previous?.achievementsDetailsComplete,
+    iconsComplete: previous?.achievementsIconsComplete,
   })
 }
 
@@ -252,6 +258,8 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
     achievementPromises: {},
     // In-flight detail requests keyed by steamId and appid.
     detailPromises: {},
+    // Games already checked for missing achievement icons during this session.
+    iconDetailAttempts: {},
   }),
   getters: {
     profileFor: (state) => (steamId) => state.profiles[String(steamId)]?.profile || null,
@@ -316,6 +324,8 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
               unlockedCount: gameRecord.unlockedCount,
               detailsComplete: achEntry?.detailsComplete
                 ?? gameRecord.achievementsDetailsComplete,
+              iconsComplete: achEntry?.iconsComplete
+                ?? gameRecord.achievementsIconsComplete,
             })
           })
 
@@ -498,6 +508,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           const achievements = decorateAchievements(game, summary.achievements || [])
           await this.storeAchievementResult(id, game, achievements, summary.available, {
             detailsComplete: summary.details_complete === true,
+            iconsComplete: summary.icons_complete === true,
             achievementCount: summary.achievement_count,
             unlockedCount: summary.unlocked_count,
           })
@@ -564,6 +575,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           achievementCount: summary.achievementCount,
           unlockedCount: summary.unlockedCount,
           detailsComplete: summary.detailsComplete ?? true,
+          iconsComplete: summary.iconsComplete ?? currentGame.achievementsIconsComplete,
         },
       )
       profileState.games.splice(index, 1, derived)
@@ -579,6 +591,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
             available,
             cachedAt: derived.achievementsUpdatedAt,
             detailsComplete: derived.achievementsDetailsComplete,
+            iconsComplete: derived.achievementsIconsComplete,
           }),
         ])
       } catch (persistenceError) {
@@ -593,7 +606,10 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
       else if (this.syncPromises[id]) await this.syncPromises[id]
       if (this.achievementPromises[id]) await this.achievementPromises[id]
       const game = this.profiles[id]?.games.find((item) => String(item.appid) === String(appId))
-      if (!game || game.achievementsDetailsComplete) return game
+      if (
+        !game ||
+        (game.achievementsDetailsComplete && game.achievementsIconsComplete)
+      ) return game
       if (this.detailPromises[key]) return this.detailPromises[key]
 
       const promise = (async () => {
@@ -610,7 +626,10 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           currentGame,
           achievements,
           result?.available !== false,
-          { detailsComplete: true },
+          {
+            detailsComplete: true,
+            iconsComplete: result?.icons_complete === true || result?.available === false,
+          },
         )
         return this.profiles[id]?.games.find(
           (item) => String(item.appid) === String(appId),
@@ -622,6 +641,17 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
       return promise
     },
 
+    async loadVisibleAchievementIcons(steamId, appId) {
+      const id = String(steamId)
+      const app = String(appId)
+      const key = `${id}:${app}`
+      const game = this.profiles[id]?.games.find((item) => String(item.appid) === app)
+      if (!game || game.achievementsIconsComplete || this.iconDetailAttempts[key]) return game
+
+      this.iconDetailAttempts[key] = true
+      return this.loadGameAchievementDetails(id, app)
+    },
+
     /** Drops in-memory state for a profile. IndexedDB is intentionally untouched. */
     clearProfileMemory(steamId) {
       const id = String(steamId)
@@ -629,6 +659,9 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
       delete this.errors[id]
       delete this.syncs[id]
       delete this.hydration[id]
+      Object.keys(this.iconDetailAttempts).forEach((key) => {
+        if (key.startsWith(`${id}:`)) delete this.iconDetailAttempts[key]
+      })
     },
   },
 })

@@ -74,7 +74,8 @@ now makes **2 + ceil(N / TOP_ACHIEVEMENTS_BATCH_SIZE)** Steam requests at most
 (player summary, owned games, and batched Top results). With the default batch
 size of 164, a 164-game profile uses three Steam requests total before any
 detail page is opened. A detail page retains the legacy fallback and may make
-one player-achievement request plus one shared/cached global-percentage request.
+one player-achievement request, one cached game-schema request for achievement
+names/icons, plus a shared/cached global-percentage request.
 
 The summary endpoint reuses the same owned-games cache as the library route.
 Identical Top batches share cached responses and in-flight requests. An active
@@ -90,7 +91,9 @@ are repaired individually, with a limit of ten fallbacks per batch; an empty or
 failed multi-game batch is reported instead of triggering a mass legacy
 fallback. A result list reaching `TOP_ACHIEVEMENTS_MAX` is treated as possibly
 truncated and falls back for that game. All Steam responses reuse the existing
-in-memory cache and in-flight request coalescing.
+in-memory cache and in-flight request coalescing. The on-demand detail route
+joins `GetPlayerAchievements` with `GetSchemaForGame` so each achievement can
+include its Steam icon; the profile summary path does not request game schemas.
 
 ## Resource controls
 

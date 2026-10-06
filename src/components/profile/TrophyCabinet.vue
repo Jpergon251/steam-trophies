@@ -9,7 +9,7 @@ const props = defineProps({
   status: { type: String, default: 'idle' },
   progress: { type: Object, default: () => ({ processed: 0, total: 0 }) },
 })
-defineEmits(['select-trophy', 'select-diamond'])
+defineEmits(['select-trophy', 'select-diamond', 'request-achievement-icons'])
 
 const tierKeys = ['bronze', 'silver', 'gold']
 
@@ -41,6 +41,7 @@ const shelves = computed(() => ({
       :trophies="shelves[key]"
       :loading="status === 'loading'"
       @select="$emit('select-trophy', $event)"
+      @request-achievement-icons="$emit('request-achievement-icons', $event)"
     />
     <TrophyShelf
       tier="diamond"

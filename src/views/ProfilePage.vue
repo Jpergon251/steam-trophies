@@ -104,6 +104,17 @@ async function openGame({ game, context }) {
     query: context,
   })
 }
+
+async function loadVisibleAchievementIcons(appId) {
+  try {
+    await steamStore.loadVisibleAchievementIcons(steamId.value, appId)
+  } catch (error) {
+    console.warn(
+      `Could not load achievement icons for Steam game ${appId}; keeping the available trophy fallback.`,
+      error,
+    )
+  }
+}
 </script>
 
 <template>
@@ -242,6 +253,7 @@ async function openGame({ game, context }) {
               :progress="collectionProgress"
               @select-trophy="selectedTrophy = { ...$event, game: gameByAppId.get(String($event.appid)) || null }"
               @select-diamond="selectedTrophy = { isDiamond: true, game: $event, name: $event.name }"
+              @request-achievement-icons="loadVisibleAchievementIcons"
             />
             <GamesCollection
               v-else-if="selectedView === 'games'"

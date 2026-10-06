@@ -17,6 +17,7 @@ const profile = computed(() => steamStore.profileFor(steamId.value))
 const game = computed(() => steamStore.gamesFor(steamId.value).find((item) => String(item.appid) === appid.value) || null)
 const detailsPending = ref(false)
 const detailsError = ref(null)
+const failedAchievementIcons = ref(new Set())
 const isLoading = computed(() => {
   if (detailsPending.value) return true
   if (game.value) return !game.value.achievementsDetailsComplete && !detailsError.value
@@ -138,7 +139,18 @@ watch(appid, () => {
   activeFilter.value = 'all'
   search.value = ''
   sortBy.value = 'steam'
+  failedAchievementIcons.value = new Set()
 })
+
+function achievementIconFailed(achievement, index) {
+  const key = achievement.apiname || `${achievement.name}-${index}`
+  return failedAchievementIcons.value.has(key)
+}
+
+function markAchievementIconFailed(achievement, index) {
+  const key = achievement.apiname || `${achievement.name}-${index}`
+  failedAchievementIcons.value = new Set(failedAchievementIcons.value).add(key)
+}
 </script>
 
 <template>
@@ -265,8 +277,22 @@ watch(appid, () => {
               class="achievement-row"
               :class="[`achievement-row--${achievementTier(achievement)}`, `trophy-tier--${achievementTier(achievement)}`, { 'achievement-row--locked': !isUnlocked(achievement) }]"
             >
+              <Trophy
+                class="achievement-row__tier-icon"
+                :size="30"
+                :stroke-width="1.5"
+                :aria-label="$t(`game.tiers.${achievementTier(achievement)}`)"
+                role="img"
+              />
               <div class="achievement-row__icon-wrap">
-                <img v-if="achievement.icon" class="achievement-row__icon" :src="achievement.icon" :alt="`${achievement.name} icon`" loading="lazy" />
+                <img
+                  v-if="achievement.icon && !achievementIconFailed(achievement, index)"
+                  class="achievement-row__icon"
+                  :src="achievement.icon"
+                  :alt="`${achievement.name} icon`"
+                  loading="lazy"
+                  @error="markAchievementIconFailed(achievement, index)"
+                />
                 <Trophy v-else class="achievement-row__fallback" :size="38" :stroke-width="1.2" aria-hidden="true" />
                 <span v-if="isUnlocked(achievement)" class="achievement-row__earned-mark" aria-label="Unlocked"><Check :size="14" /></span>
                 <span v-else class="achievement-row__locked-mark" aria-label="Locked"><LockKeyhole :size="13" /></span>

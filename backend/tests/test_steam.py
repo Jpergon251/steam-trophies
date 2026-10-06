@@ -59,6 +59,51 @@ class GetPlayerAchievementsTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(httpx.HTTPStatusError):
                 await get_player_achievements("76561199548509683", 961200)
 
+    async def test_schema_fills_missing_achievement_icons_and_names(self):
+        player = {
+            "playerstats": {
+                "success": True,
+                "gameName": "Example",
+                "achievements": [{
+                    "apiname": "FIRST",
+                    "achieved": 1,
+                    "icon": None,
+                    "icongray": None,
+                }],
+            },
+        }
+        global_percentages = {
+            "achievementpercentages": {
+                "achievements": [{"name": "FIRST", "percent": "12.5"}],
+            },
+        }
+        schema = {
+            "game": {
+                "availableGameStats": {
+                    "achievements": [{
+                        "name": "FIRST",
+                        "displayName": "First achievement",
+                        "description": "Complete the first task.",
+                        "icon": "https://steamcdn-a.akamaihd.net/first.png",
+                        "icongray": "https://steamcdn-a.akamaihd.net/first-gray.png",
+                        "hidden": 0,
+                    }],
+                },
+            },
+        }
+        request = AsyncMock(side_effect=[player, global_percentages, schema])
+        with patch("app.services.steam.steam_request", new=request):
+            result = await get_player_achievements("76561199548509683", 123)
+
+        achievement = result["achievements"][0]
+        self.assertEqual(achievement["name"], "First achievement")
+        self.assertEqual(achievement["description"], "Complete the first task.")
+        self.assertEqual(achievement["icon"], "https://steamcdn-a.akamaihd.net/first.png")
+        self.assertEqual(achievement["icongray"], "https://steamcdn-a.akamaihd.net/first-gray.png")
+        self.assertEqual(achievement["global_percent"], "12.5")
+        self.assertTrue(result["icons_complete"])
+        self.assertEqual(request.await_count, 3)
+
 
 class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
     steam_id = "76561199548509683"
@@ -82,8 +127,8 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
                     "achievements": [{
                         "name": "ONE",
                         "desc": "First",
-                        "icon": "color.png",
-                        "icon_gray": "gray.png",
+                        "icon": "0123456789abcdef",
+                        "icon_gray": "https://cdn.example.test/gray.png",
                         "hidden": 0,
                         "player_percent_unlocked": 8.5,
                     }],
@@ -103,6 +148,14 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary["unlocked_count"], 1)
         self.assertFalse(summary["details_complete"])
         self.assertEqual(summary["achievements"][0]["global_percent"], 8.5)
+        self.assertEqual(
+            summary["achievements"][0]["icon"],
+            "https://media.steampowered.com/steamcommunity/public/images/apps/10/0123456789abcdef.jpg",
+        )
+        self.assertEqual(
+            summary["achievements"][0]["icongray"],
+            "https://cdn.example.test/gray.png",
+        )
         self.assertNotIn("apiname", summary["achievements"][0])
         self.assertEqual(result["errors"], {})
         self.assertEqual(request.await_count, 2)
@@ -526,6 +579,8 @@ class SteamTransportTests(unittest.IsolatedAsyncioTestCase):
                         "achievements": [{"apiname": "ONE", "achieved": 1}],
                     }
                 }
+            if "GetSchemaForGame" in endpoint:
+                return {"game": {"availableGameStats": {"achievements": []}}}
             return {
                 "achievementpercentages": {
                     "achievements": [{"name": "ONE", "percent": "50"}]
@@ -540,7 +595,7 @@ class SteamTransportTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(first, second)
-        self.assertEqual(request.await_count, 2)
+        self.assertEqual(request.await_count, 3)
         self.assertEqual(first["achievements"][0]["global_percent"], "50")
 
     async def test_force_refresh_bypasses_player_cache_but_keeps_global_cache_path(self):
@@ -552,7 +607,11 @@ class SteamTransportTests(unittest.IsolatedAsyncioTestCase):
             }
         }
         global_response = {"achievementpercentages": {"achievements": []}}
-        request = AsyncMock(side_effect=[response, global_response, response, global_response])
+        schema_response = {"game": {"availableGameStats": {"achievements": []}}}
+        request = AsyncMock(side_effect=[
+            response, global_response, schema_response,
+            response, global_response, schema_response,
+        ])
 
         with patch("app.services.steam.steam_request", new=request):
             await get_player_achievements("76561199548509685", 12346)
@@ -562,9 +621,9 @@ class SteamTransportTests(unittest.IsolatedAsyncioTestCase):
                 force_refresh=True,
             )
 
-        self.assertEqual(request.await_count, 4)
+        self.assertEqual(request.await_count, 6)
         self.assertNotIn("force_refresh", request.await_args_list[1].kwargs)
-        self.assertTrue(request.await_args_list[2].kwargs["force_refresh"])
+        self.assertTrue(request.await_args_list[3].kwargs["force_refresh"])
 
     async def test_game_without_stats_does_not_block_another_game(self):
         no_stats_response = httpx.Response(
@@ -594,6 +653,8 @@ class SteamTransportTests(unittest.IsolatedAsyncioTestCase):
                         "achievements": [],
                     }
                 }
+            if "GetSchemaForGame" in endpoint:
+                return {"game": {"availableGameStats": {"achievements": []}}}
             return {"achievementpercentages": {"achievements": []}}
 
         with patch(

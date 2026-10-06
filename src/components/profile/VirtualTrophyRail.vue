@@ -10,7 +10,7 @@ const props = defineProps({
   afterWidth: { type: Number, required: true },
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'request-achievement-icons'])
 const visibleTrophies = computed(() => props.trophies.slice(props.start, props.end))
 </script>
 
@@ -26,6 +26,7 @@ const visibleTrophies = computed(() => props.trophies.slice(props.start, props.e
     :key="`${trophy.appid}-${trophy.apiname}-${start + offset}`"
     :trophy="trophy"
     @select="emit('select', $event)"
+    @request-achievement-icons="emit('request-achievement-icons', $event)"
   />
   <span
     v-if="afterWidth"

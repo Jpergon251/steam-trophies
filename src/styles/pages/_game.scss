@@ -265,7 +265,7 @@
   position: relative;
   display: grid;
   min-width: 0;
-  grid-template-columns: 84px minmax(0, 1fr);
+  grid-template-columns: 34px 76px minmax(0, 1fr);
   align-items: center;
   gap: $space-5;
   padding: $space-5 $space-3;
@@ -274,6 +274,7 @@
   transition: background $transition-normal;
 }
 .achievement-row:hover { background: linear-gradient(100deg, $glass-white-04, transparent 78%); }
+.achievement-row__tier-icon { color: var(--modal-tier); filter: drop-shadow(0 0 8px var(--modal-tier-glow)); }
 .achievement-row__icon-wrap {
   position: relative;
   display: grid;
@@ -419,7 +420,7 @@
   .achievement-filters { width: 100%; gap: 0; }
   .achievement-filters button { flex: 1 1 0; justify-content: center; gap: $space-1; padding-inline: $space-2; font-size: $font-size-sm; }
   .achievement-search { width: 100%; }
-  .achievement-row { grid-template-columns: 58px minmax(0, 1fr); gap: $space-3; padding: $space-4 $space-1; }
+  .achievement-row { grid-template-columns: 24px 56px minmax(0, 1fr); gap: $space-3; padding: $space-4 $space-1; }
   .achievement-row__icon-wrap { width: 56px; height: 56px; }
   .achievement-row__icon { width: 50px; height: 50px; }
   .achievement-row__earned-mark, .achievement-row__locked-mark { width: 20px; height: 20px; }
@@ -521,7 +522,7 @@
 .achievement-filters button.is-active { border-color: $glass-white-10; background: $glass-white-04; }
 .achievement-search { min-height: 42px; border: 1px solid $glass-white-08; border-radius: $radius-sm; background: rgba(255, 255, 255, 0.025); }
 .achievement-sort select { min-height: 42px; padding-inline: $space-3; border: 1px solid $glass-white-08; border-radius: $radius-sm; }
-.achievement-row { grid-template-columns: 88px minmax(0, 1fr); padding: $space-5 $space-4; background: linear-gradient(105deg, rgba(255, 255, 255, 0.018), transparent 74%); transition: background $transition-normal, transform $transition-normal, border-color $transition-normal; animation: achievement-arrive 420ms $ease-expressive both; }
+.achievement-row { grid-template-columns: 34px 76px minmax(0, 1fr); padding: $space-5 $space-4; background: linear-gradient(105deg, rgba(255, 255, 255, 0.018), transparent 74%); transition: background $transition-normal, transform $transition-normal, border-color $transition-normal; animation: achievement-arrive 420ms $ease-expressive both; }
 .achievement-row:nth-child(2n) { animation-delay: 35ms; }
 .achievement-row:hover { z-index: 1; transform: translateY(-2px); border-bottom-color: rgba(255, 255, 255, 0.17); background: linear-gradient(100deg, rgba(255, 255, 255, 0.045), transparent 82%); }
 .achievement-row__icon { transition: transform $transition-normal, filter $transition-normal; }
@@ -586,7 +587,7 @@
   .achievement-filters { width: 100%; gap: $space-1; }
   .achievement-filters button { flex: 0 0 auto; min-height: 44px; padding-inline: $space-3; font-size: $font-size-sm; }
   .achievement-search { width: 100%; }
-  .achievement-row { grid-template-columns: 62px minmax(0, 1fr); gap: $space-3; padding: $space-4 $space-1; }
+  .achievement-row { grid-template-columns: 28px 60px minmax(0, 1fr); gap: $space-3; padding: $space-4 $space-1; }
   .achievement-row__icon-wrap { width: 60px; height: 60px; }
   .achievement-row__title-line { align-items: flex-start; flex-direction: column; gap: $space-1; }
   .achievement-row__title-line h3 { font-size: $font-size-md; }
@@ -599,7 +600,7 @@
   .game-archive-header { margin-inline: calc(-1 * #{$space-3}); padding-inline: $space-3; }
   .game-tier { grid-template-columns: 17px auto; }
   .game-tier > span:last-child { font-size: $font-size-xs; }
-  .achievement-row { grid-template-columns: 54px minmax(0, 1fr); gap: $space-2; }
+  .achievement-row { grid-template-columns: 22px 52px minmax(0, 1fr); gap: $space-2; }
   .achievement-row__icon-wrap { width: 52px; height: 52px; }
 }
 @media (prefers-reduced-motion: reduce) {
