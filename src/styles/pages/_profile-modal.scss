@@ -581,28 +581,17 @@
 .trophy-modal__card--diamond::before {
   position: absolute;
   z-index: 0;
-  inset: -3%;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 58%;
   border-radius: inherit;
   background: var(--modal-artwork) center / cover no-repeat;
   content: "";
-  opacity: 0.76;
-  filter: saturate(1.2) brightness(0.72);
-  -webkit-mask-image: radial-gradient(
-    ellipse at center,
-    #000 0%,
-    #000 28%,
-    rgba(0, 0, 0, 0.78) 52%,
-    rgba(0, 0, 0, 0.32) 72%,
-    transparent 94%
-  );
-  mask-image: radial-gradient(
-    ellipse at center,
-    #000 0%,
-    #000 28%,
-    rgba(0, 0, 0, 0.78) 52%,
-    rgba(0, 0, 0, 0.32) 72%,
-    transparent 94%
-  );
+  opacity: 0.72;
+  filter: saturate(1.15) brightness(0.76);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 100%);
   pointer-events: none;
 }
 .trophy-modal__card--diamond::after {
@@ -610,11 +599,12 @@
   z-index: 0;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(2, 5, 8, 0.18) 0%,
-    rgba(2, 5, 8, 0.38) 56%,
-    rgba(2, 5, 8, 0.76) 100%
+  background: linear-gradient(
+    to bottom,
+    rgba(2, 5, 8, 0.14) 0%,
+    rgba(2, 5, 8, 0.2) 34%,
+    rgba(3, 4, 5, 0.84) 68%,
+    rgba(3, 4, 5, 0.98) 100%
   );
   content: "";
   pointer-events: none;

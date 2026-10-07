@@ -19,14 +19,14 @@ function handleArtworkError(event) {
     class="archive-game"
     :class="{ 'archive-game--diamond': game.isDiamond }"
     type="button"
-    :aria-label="`View ${game.name} details`"
+    :aria-label="$t('profile.games.openGame', { name: game.name })"
     @click="$emit('select', game)"
   >
     <span class="archive-game__artwork">
       <img
         v-if="game.coverUrl"
         :src="game.coverUrl"
-        :alt="`${game.name} artwork`"
+        :alt="$t('profile.games.artworkAlt', { name: game.name })"
         loading="lazy"
         @error="handleArtworkError"
       />
@@ -37,9 +37,9 @@ function handleArtworkError(event) {
       <span
         v-if="game.isDiamond"
         class="archive-game__diamond"
-        aria-label="Diamond trophy achieved"
+        :aria-label="$t('profile.games.diamondAchieved')"
         ><Diamond :size="13" fill="currentColor" aria-hidden="true" /><span
-          >Diamond trophy</span
+          >{{ $t('profile.games.diamondTrophy') }}</span
         ></span
       >
       <span class="archive-game__content">
@@ -50,7 +50,7 @@ function handleArtworkError(event) {
           <span class="archive-game__progress"
             ><span
               >{{ game.achievementSummaryStatus === 'partial' ? '≥ ' : '' }}{{ game.unlockedCount }} /
-              {{ game.achievementCount }} achievements</span
+              {{ game.achievementCount }} {{ $t('profile.games.achievements') }}</span
             ><b v-if="game.achievementSummaryStatus !== 'partial'">{{ game.progress }}%</b></span
           >
           <span
@@ -61,7 +61,7 @@ function handleArtworkError(event) {
             :aria-valuenow="game.progress"
             aria-valuemin="0"
             aria-valuemax="100"
-            :aria-label="`${game.name} completion`"
+            :aria-label="$t('profile.games.completionAria', { name: game.name })"
             ><span :style="{ width: `${game.progress}%` }"
           /></span>
         </template>
@@ -72,7 +72,7 @@ function handleArtworkError(event) {
       <ArrowUpRight class="archive-game__arrow" :size="17" aria-hidden="true" />
     </span>
     <span v-if="game.playtime_forever" class="archive-game__playtime"
-      >{{ Math.round(game.playtime_forever / 60) }} h played</span
+      >{{ $t('profile.games.hoursPlayed', { hours: Math.round(game.playtime_forever / 60) }) }}</span
     >
   </button>
 </template>

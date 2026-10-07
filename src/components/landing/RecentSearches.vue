@@ -39,7 +39,7 @@
                 v-if="item.avatar && !hasAvatarError(item.steamId)"
                 class="recent-searches__avatar"
                 :src="item.avatar"
-                :alt="`${item.personaName}'s avatar`"
+                :alt="$t('landing.recentAvatarAlt', { name: item.personaName })"
                 loading="lazy"
                 @error="onAvatarError(item.steamId)"
               />

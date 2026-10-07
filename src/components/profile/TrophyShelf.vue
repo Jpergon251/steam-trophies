@@ -34,7 +34,18 @@ const railWidth = ref(0);
 const railPaddingStart = ref(0);
 const itemGap = ref(0);
 const cardWidth = ref(208);
+const failedDiamondArtwork = ref(new Set());
 const trophyCount = computed(() => props.totalCount ?? props.trophies.length);
+
+function diamondArtworkUrl(game) {
+  return [game.headerUrl, game.coverUrl]
+    .filter(Boolean)
+    .find((url) => !failedDiamondArtwork.value.has(url)) || ''
+}
+
+function handleDiamondArtworkError(url) {
+  failedDiamondArtwork.value = new Set(failedDiamondArtwork.value).add(url)
+}
 
 const isDiamondLoop = computed(
   () => props.diamonds && props.trophies.length > 2,
@@ -673,7 +684,7 @@ onBeforeUnmount(() => {
           v-if="!compact"
           class="profile-page__label"
         >
-          THE CABINET
+          {{ $t("profile.cabinet.eyebrow") }}
         </p>
 
         <h2 :id="`shelf-${tier}`">
@@ -692,15 +703,9 @@ onBeforeUnmount(() => {
         </span>
 
         <small>
-          {{
-            trophyCount === 1
-              ? diamonds
-                ? "game"
-                : "trophy"
-              : diamonds
-                ? "games"
-                : "trophies"
-          }}
+          {{ $t(`profile.cabinet.${diamonds
+            ? trophyCount === 1 ? "game" : "games"
+            : trophyCount === 1 ? "trophy" : "trophies"}`) }}
         </small>
       </span>
     </header>
@@ -715,8 +720,8 @@ onBeforeUnmount(() => {
     >
       {{
         diamonds
-          ? "No diamonds yet"
-          : `No ${label.toLowerCase()} trophies yet`
+          ? $t("profile.cabinet.emptyDiamonds")
+          : $t("profile.cabinet.emptyTier", { tier: label.toLowerCase() })
       }}
     </div>
 
@@ -736,7 +741,7 @@ onBeforeUnmount(() => {
         ref="rail"
         class="trophy-shelf__rail"
         tabindex="0"
-        :aria-label="`${label} trophy display`"
+        :aria-label="$t('profile.cabinet.trophyDisplayAria', { tier: label })"
         @scroll.passive="onRailScroll"
         @wheel="onWheel"
         @pointerdown="onDragStart"
@@ -761,7 +766,7 @@ onBeforeUnmount(() => {
                   Math.abs(virtualIndex - activeVirtualIndex) === 1,
               }"
               type="button"
-              :aria-label="`View Diamond completion details for ${game.name}`"
+              :aria-label="$t('profile.cabinet.diamondOpenAria', { name: game.name })"
               :aria-current="
                 isDiamondLoop &&
                 virtualIndex === activeVirtualIndex
@@ -775,44 +780,47 @@ onBeforeUnmount(() => {
                   : scrollToVirtualIndex(virtualIndex)
               "
             >
-              <span
-                class="diamond-trophy__artwork"
-                :style="{
-                  backgroundImage: game.headerUrl || game.coverUrl
-                    ? `url('${game.headerUrl || game.coverUrl}')`
-                    : undefined,
-                }"
-                aria-hidden="true"
-              />
-              <span class="diamond-trophy__artwork-overlay" aria-hidden="true" />
-              <span class="diamond-trophy__object" aria-hidden="true">
-                <Diamond
-                  class="diamond-trophy__icon"
-                  :size="164"
-                  :stroke-width="1.35"
-                />
+              <span class="diamond-trophy__visual" aria-hidden="true">
+                <span
+                  v-if="diamondArtworkUrl(game)"
+                  class="diamond-trophy__artwork"
+                >
+                  <img
+                    :key="diamondArtworkUrl(game)"
+                    :src="diamondArtworkUrl(game)"
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    @error="handleDiamondArtworkError(diamondArtworkUrl(game))"
+                  />
+                </span>
+                <span v-else class="diamond-trophy__artwork-unavailable">
+                  {{ $t("profile.cabinet.artworkUnavailable") }}
+                </span>
+                <span class="diamond-trophy__tier-badge">
+                  <Diamond :size="26" fill="currentColor" :stroke-width="1.7" />
+                </span>
               </span>
+              <span class="diamond-trophy__info">
+                <strong>
+                  {{
+                    $t(
+                      "profile.cabinet.diamondTrophyName",
+                    )
+                  }}
+                </strong>
 
-              <strong>
-                {{
-                  $t(
-                    "profile.cabinet.diamondTrophyName",
-                  )
-                }}
-              </strong>
+                <small>
+                  {{
+                    $t(
+                      "profile.cabinet.diamondCompleted",
+                    )
+                  }}
+                </small>
 
-              <small>
-                {{
-                  $t(
-                    "profile.cabinet.diamondCompleted",
-                  )
-                }}
-              </small>
-
-              <span
-                class="diamond-trophy__game-name"
-              >
-                {{ game.name }}
+                <span class="diamond-trophy__game-name">
+                  {{ game.name }}
+                </span>
               </span>
             </button>
           </template>
@@ -838,13 +846,13 @@ onBeforeUnmount(() => {
 
       <div
         class="trophy-display-stage__navigation"
-        :aria-label="`${label} showcase navigation`"
+        :aria-label="$t('profile.cabinet.navigationAria', { tier: label })"
       >
         <button
           v-if="trophyCount > 1"
           class="trophy-display-stage__arrow trophy-display-stage__arrow--previous"
           type="button"
-          :aria-label="`Previous ${label} trophy`"
+          :aria-label="$t('profile.cabinet.previousAria', { tier: label })"
           @click="scrollByShelf(-1)"
         >
           <ChevronLeft :size="21" />
@@ -863,7 +871,7 @@ onBeforeUnmount(() => {
           v-if="trophyCount > 1"
           class="trophy-display-stage__arrow trophy-display-stage__arrow--next"
           type="button"
-          :aria-label="`Next ${label} trophy`"
+          :aria-label="$t('profile.cabinet.nextAria', { tier: label })"
           @click="scrollByShelf(1)"
         >
           <ChevronRight :size="21" />

@@ -32,7 +32,7 @@ function loadWindow(tier, start, end) {
 </script>
 
 <template>
-  <section class="trophy-cabinet" aria-label="Trophy cabinet">
+  <section class="trophy-cabinet" :aria-label="$t('profile.cabinet.title')">
     <p v-if="status === 'loading'" class="trophy-cabinet__loading" role="status">
       {{ $t('profile.cabinet.loading') }}
     </p>

@@ -53,7 +53,7 @@ onBeforeUnmount(() => visibilityObserver?.disconnect())
           v-if="achievementIcons[achievementIconIndex]"
           class="trophy-card__achievement-icon"
           :src="achievementIcons[achievementIconIndex]"
-          :alt="`${trophy.name} achievement icon`"
+          :alt="$t('profile.modal.achievementIconAlt', { name: trophy.name })"
           loading="lazy"
           decoding="async"
           @error="achievementIconIndex < achievementIcons.length - 1
@@ -72,7 +72,7 @@ onBeforeUnmount(() => visibilityObserver?.disconnect())
       <span class="trophy-card__tier-badge" :class="`trophy-card__tier-badge--${tier}`" aria-hidden="true">
         <Trophy :size="32" :stroke-width="1.8" />
       </span>
-      <LockKeyhole v-if="!isUnlocked()" class="trophy-card__lock" :size="13" aria-label="Locked" />
+      <LockKeyhole v-if="!isUnlocked()" class="trophy-card__lock" :size="13" :aria-label="$t('profile.modal.lockedAria')" />
     </span>
     <small v-if="trophy.global_percent != null" class="trophy-card__rarity">{{ Number(trophy.global_percent).toFixed(1) }}%</small>
     <strong>{{ trophy.name }}</strong>
@@ -81,7 +81,7 @@ onBeforeUnmount(() => visibilityObserver?.disconnect())
         v-if="trophy.gameIcon && !gameIconFailed"
         class="trophy-card__game-icon"
         :src="trophy.gameIcon"
-        :alt="`${trophy.gameName} icon`"
+        :alt="$t('profile.modal.gameIconAlt', { name: trophy.gameName })"
         loading="lazy"
         decoding="async"
         @error="gameIconFailed = true"

@@ -14,14 +14,14 @@ const profileRoute = { name: 'profile', params: { steamId: props.profile.steamid
 </script>
 
 <template>
-  <article class="profile-preview" aria-label="Steam profile found">
+  <article class="profile-preview" :aria-label="$t('landing.profileFoundAria')">
     <div class="profile-preview__identity">
       <div class="profile-preview__avatar-frame">
         <img
           v-if="profile.avatarfull || profile.avatarmedium"
           class="profile-preview__avatar"
           :src="profile.avatarfull || profile.avatarmedium"
-          :alt="`${profile.personaname}'s avatar`"
+          :alt="$t('profile.avatarAlt', { name: profile.personaname })"
         />
         <UserRound
           v-else

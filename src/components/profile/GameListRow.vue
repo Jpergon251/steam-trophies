@@ -29,7 +29,7 @@ function handleArtworkError(event) {
       <img
         v-if="game.coverUrl"
         :src="game.coverUrl"
-        :alt="`${game.name} artwork`"
+        :alt="$t('profile.games.artworkAlt', { name: game.name })"
         loading="lazy"
         decoding="async"
         @error="handleArtworkError"
@@ -44,7 +44,7 @@ function handleArtworkError(event) {
         <strong class="archive-list-row__name" :title="game.name">{{ game.name }}</strong>
         <template v-if="game.achievementSummaryKnown && game.achievementCount">
           <span class="archive-list-row__completion">
-            <span>{{ game.achievementSummaryStatus === 'partial' ? '≥ ' : '' }}{{ game.unlockedCount }} / {{ game.achievementCount }} {{ $t('profile.games.trophies') }}</span>
+            <span>{{ game.achievementSummaryStatus === 'partial' ? '≥ ' : '' }}{{ game.unlockedCount }} / {{ game.achievementCount }} {{ $t('profile.games.achievements') }}</span>
             <b v-if="game.achievementSummaryStatus !== 'partial'">{{ game.progress }}%</b>
           </span>
         </template>
@@ -60,7 +60,7 @@ function handleArtworkError(event) {
             :key="tier"
             class="archive-list-row__tier trophy-tier"
             :class="`trophy-tier--${tier}`"
-            :aria-label="`${$t(`profile.cabinet.${tier}`)} ${game.tierCounts?.[tier] || 0}`"
+            :aria-label="$t('profile.cabinet.tierCountAria', { tier: $t(`profile.cabinet.${tier}`), count: game.tierCounts?.[tier] || 0 })"
           >
             <Trophy :size="15" aria-hidden="true" />
             <span>{{ game.tierCounts?.[tier] || 0 }}</span>
@@ -80,7 +80,7 @@ function handleArtworkError(event) {
           :aria-valuenow="game.progress"
           aria-valuemin="0"
           aria-valuemax="100"
-          :aria-label="`${game.name} ${game.progress}%`"
+          :aria-label="$t('profile.games.completionPercentAria', { name: game.name, percent: game.progress })"
         >
           <span :style="{ width: `${game.progress}%` }" />
         </span>

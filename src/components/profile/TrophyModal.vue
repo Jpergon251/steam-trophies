@@ -147,7 +147,7 @@ onBeforeUnmount(() => {
             v-if="achievementIcons[achievementIconIndex]"
             class="trophy-modal__achievement-icon"
             :src="achievementIcons[achievementIconIndex]"
-            :alt="`${trophy.name} achievement icon`"
+            :alt="$t('profile.modal.achievementIconAlt', { name: trophy.name })"
             @error="achievementIconIndex < achievementIcons.length - 1
               ? achievementIconIndex += 1
               : achievementIconIndex = achievementIcons.length"
@@ -176,7 +176,7 @@ onBeforeUnmount(() => {
           <h2 id="trophy-modal-title">{{ trophy.name }}</h2>
         </div>
         <div class="trophy-modal__game">
-          <img v-if="trophy.gameIcon" :src="trophy.gameIcon" :alt="`${trophy.gameName} icon`" />
+          <img v-if="trophy.gameIcon" :src="trophy.gameIcon" :alt="$t('profile.modal.gameIconAlt', { name: trophy.gameName })" />
           <strong>{{ trophy.gameName }}</strong>
         </div>
         <p class="trophy-modal__description">{{ trophy.description || $t('game.noDescription') }}</p>

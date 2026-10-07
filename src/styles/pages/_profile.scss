@@ -137,10 +137,66 @@
   font-variant-numeric: tabular-nums;
 }
 
+.profile-overview__stat-value {
+  display: inline-flex;
+  min-height: 1.1em;
+  align-items: center;
+  justify-content: center;
+  gap: $space-2;
+}
+
+.profile-overview__stat-loader {
+  flex: 0 0 auto;
+  color: $color-text-tertiary;
+  animation: profile-spin 1.2s linear infinite;
+}
+
+.profile-stat-number-enter-active,
+.profile-stat-number-leave-active {
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.profile-stat-number-enter-from {
+  opacity: 0;
+  transform: translateY(5px);
+}
+
+.profile-stat-number-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
+}
+
 .profile-overview__stat span {
   color: $color-text-tertiary;
   font-size: $font-size-xs;
   letter-spacing: $letter-spacing-uppercase;
+}
+
+.profile-overview__stat-value > span {
+  color: $color-text-primary;
+  font-family: $font-mono;
+  font-size: clamp($font-size-xl, 3vw, $font-size-2xl);
+  font-weight: $font-weight-light;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-overview__stat-loader {
+    animation: none;
+  }
+
+  .profile-page__sync-status svg {
+    animation: none;
+  }
+
+  .profile-stat-number-enter-active,
+  .profile-stat-number-leave-active,
+  .profile-overview__notice--loading {
+    animation: none;
+    transition: none;
+  }
 }
 
 .profile-overview__tiers {
@@ -157,6 +213,21 @@
   color: $color-text-tertiary;
   font-size: $font-size-xs;
   text-align: center;
+}
+
+.profile-overview__notice--loading {
+  animation: profile-notice-arrive 240ms ease-out both;
+}
+
+@keyframes profile-notice-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .profile-overview__tier {

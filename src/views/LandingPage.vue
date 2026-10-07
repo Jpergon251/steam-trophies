@@ -26,7 +26,7 @@
 
       <RecentSearches />
 
-      <div class="landing__collection" aria-label="Four trophy tiers">
+      <div class="landing__collection" :aria-label="$t('landing.trophyTiersAria')">
         <div class="landing__tier landing__tier--bronze trophy-tier--bronze">
           <Trophy class="landing__tier-icon" :size="17" :stroke-width="1.5" />
           <span>{{ $t('landing.tiers.bronze') }}</span>

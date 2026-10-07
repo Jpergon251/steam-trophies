@@ -106,6 +106,19 @@
     color: $color-text-secondary;
     font-size: $font-size-sm;
   }
+
+  &__sync-status {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-2;
+    margin: $space-1 0 0;
+    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+
+    svg {
+      animation: profile-spin 1.2s linear infinite;
+    }
+  }
 }
 
 @media (max-width: $breakpoint-md) {

@@ -105,8 +105,9 @@
     background $transition-normal;
 }
 .games-search:focus-within {
-  border-bottom-color: $glass-white-20;
-  background: linear-gradient(90deg, $glass-white-04, transparent);
+  border-color: $glass-white-20;
+  background: $glass-white-04;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06);
 }
 .games-search input {
   width: 100%;
@@ -120,6 +121,9 @@
 }
 .games-search input::placeholder {
   color: $color-text-tertiary;
+}
+.games-search input:focus-visible {
+  outline: none;
 }
 .games-search:focus-within {
   outline: 2px solid transparent;
@@ -182,20 +186,36 @@
   white-space: nowrap;
 }
 .games-sort select {
-  max-width: 150px;
-  border: 0;
+  appearance: none;
+  max-width: 190px;
+  min-height: 42px;
+  padding: 0 $space-8 0 $space-3;
+  border: 1px solid $glass-white-10;
+  border-radius: $radius-sm;
   outline: 0;
-  background: transparent;
+  background-color: rgba(12, 14, 17, 0.92);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23999da5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right $space-3 center;
   color: $color-text-secondary;
   font: inherit;
   cursor: pointer;
+  transition: border-color $transition-normal, background-color $transition-normal, color $transition-normal;
 }
-.games-sort select:focus-visible,
-.games-search input:focus-visible {
-  outline: 2px solid $trophy-diamond;
-  outline-offset: 3px;
+.games-sort select:hover {
+  border-color: $glass-white-20;
+  background-color: rgba(24, 27, 31, 0.98);
+  color: $color-text-primary;
 }
-
+.games-sort select:focus-visible {
+  border-color: rgba(255, 255, 255, 0.34);
+  outline: 2px solid rgba(255, 255, 255, 0.16);
+  outline-offset: 2px;
+}
+.games-sort option {
+  background: #111316;
+  color: $color-text-secondary;
+}
 .archive-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

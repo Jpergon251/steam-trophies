@@ -1,5 +1,5 @@
 const STEAM_BACKEND_URL = (
-  import.meta.env.VITE_STEAM_BACKEND_URL || 'http://127.0.0.1:8000'
+  import.meta.env?.VITE_STEAM_BACKEND_URL || 'http://127.0.0.1:8000'
 ).replace(/\/$/, '')
 
 async function requestSteamProfile(path, query, parameter = 'q', options = {}) {

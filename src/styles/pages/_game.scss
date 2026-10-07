@@ -245,14 +245,34 @@
   white-space: nowrap;
 }
 .achievement-sort select {
+  appearance: none;
   max-width: 210px;
-  min-height: 40px;
-  border: 0;
-  border-bottom: 1px solid $glass-white-10;
-  background: $color-bg-primary;
+  min-height: 42px;
+  padding: 0 $space-8 0 $space-3;
+  border: 1px solid $glass-white-10;
+  border-radius: $radius-sm;
+  background-color: rgba(12, 14, 17, 0.92);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23999da5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right $space-3 center;
   color: $color-text-secondary;
   font: inherit;
   cursor: pointer;
+  transition: border-color $transition-normal, background-color $transition-normal, color $transition-normal;
+}
+.achievement-sort select:hover {
+  border-color: $glass-white-20;
+  background-color: rgba(24, 27, 31, 0.98);
+  color: $color-text-primary;
+}
+.achievement-sort select:focus-visible {
+  border-color: rgba(255, 255, 255, 0.34);
+  outline: 2px solid rgba(255, 255, 255, 0.16);
+  outline-offset: 2px;
+}
+.achievement-sort option {
+  background: #111316;
+  color: $color-text-secondary;
 }
 
 .achievement-list {
@@ -550,7 +570,6 @@
 .achievement-filters button:hover,
 .achievement-filters button.is-active { border-color: $glass-white-10; background: $glass-white-04; }
 .achievement-search { min-height: 42px; border: 1px solid $glass-white-08; border-radius: $radius-sm; background: rgba(255, 255, 255, 0.025); }
-.achievement-sort select { min-height: 42px; padding-inline: $space-3; border: 1px solid $glass-white-08; border-radius: $radius-sm; }
 .achievement-row { grid-template-columns: 34px 76px minmax(0, 1fr); padding: $space-5 $space-4; background: linear-gradient(105deg, rgba(255, 255, 255, 0.018), transparent 74%); transition: background $transition-normal, transform $transition-normal, border-color $transition-normal; animation: achievement-arrive 420ms $ease-expressive both; }
 .achievement-row:nth-child(2n) { animation-delay: 35ms; }
 .achievement-row:hover { z-index: 1; transform: translateY(-2px); border-bottom-color: rgba(255, 255, 255, 0.17); background: linear-gradient(100deg, rgba(255, 255, 255, 0.045), transparent 82%); }

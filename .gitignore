@@ -132,6 +132,8 @@ dist
 # Backend
 backend/.env
 backend/.venv/
+__pycache__/
+*.py[cod]
 
 # Temporary browser QA scripts
 .steam-search-flow.mjs

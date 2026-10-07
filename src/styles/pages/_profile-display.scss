@@ -479,42 +479,25 @@
   min-height: 330px;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: $space-2;
-  padding: $space-2;
-  overflow: hidden;
-  border: none;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
   border-radius: 0;
-  background-color: transparent;
+  background: transparent;
   background-image: none;
   color: $trophy-diamond-light;
   opacity: 1;
   transform: scale(var(--diamond-scale, var(--diamond-distant-scale)));
   transform-origin: center;
   scroll-snap-align: center;
-  -webkit-mask-image:
-    linear-gradient(to right,  transparent, #000 18%, #000 82%, transparent),
-    linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
-  -webkit-mask-composite: destination-in;
-  mask-image:
-    linear-gradient(to right,  transparent, #000 18%, #000 82%, transparent),
-    linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
-  mask-composite: intersect;
-  transition: box-shadow var(--display-duration) ease;
+  transition: color var(--display-duration) ease;
   will-change: transform;
   cursor: pointer;
 }
 
-.trophy-display-stage--diamond .diamond-trophy__object {
-  will-change: transform;
-}
-
 @media (hover: hover) {
-  .trophy-display-stage--diamond .diamond-trophy:hover .diamond-trophy__object {
-    transform: translateY(-2px);
-  }
-
-  .trophy-display-stage--diamond .diamond-trophy:hover strong,
   .trophy-display-stage--diamond .diamond-trophy:hover .diamond-trophy__game-name {
     color: $trophy-diamond-light;
   }
@@ -550,62 +533,85 @@
   filter: blur(38px);
 }
 
-/* The game artwork covers the full Diamond trophy card, including its labels. */
-.trophy-display-stage--diamond .diamond-trophy__artwork {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  background-color: $color-bg-secondary;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
-  opacity: 0.82;
+.trophy-display-stage--diamond .diamond-trophy__visual {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 184px;
+  flex: 0 0 184px;
+  overflow: hidden;
+  background: transparent;
 }
 
-/* Softly fade the artwork edges and protect label contrast. */
-.trophy-display-stage--diamond .diamond-trophy__artwork-overlay {
+.trophy-display-stage--diamond .diamond-trophy__artwork {
   position: absolute;
-  z-index: 1;
   inset: 0;
-  background:
-    radial-gradient(ellipse at center, transparent 42%, rgba(3, 9, 13, 0.2) 100%),
-    linear-gradient(180deg, rgba(3, 9, 13, 0.1), rgba(3, 9, 13, 0.54));
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 16%, #000 84%, transparent),
+    linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent);
+  -webkit-mask-composite: destination-in;
+  mask-image:
+    linear-gradient(to right, transparent, #000 16%, #000 84%, transparent),
+    linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent);
+  mask-composite: intersect;
+}
+
+.trophy-display-stage--diamond .diamond-trophy__artwork img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.trophy-display-stage--diamond .diamond-trophy__artwork-unavailable {
+  position: absolute;
+  inset: 12px;
+  display: grid;
+  place-items: center;
+  color: rgba(225, 242, 248, 0.56);
+  font-size: $font-size-sm;
+  letter-spacing: $letter-spacing-wide;
+  text-align: center;
+  text-transform: uppercase;
+  background: radial-gradient(ellipse, rgba($trophy-diamond, 0.08), transparent 72%);
+}
+
+.trophy-display-stage--diamond .diamond-trophy__tier-badge {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba($trophy-diamond-light, 0.48);
+  border-radius: 50%;
+  background: rgba(8, 18, 24, 0.92);
+  color: $trophy-diamond-light;
+  filter: drop-shadow(0 0 8px rgba($trophy-diamond, 0.58));
   pointer-events: none;
 }
 
-/* Diamond icon remains prominent over the overall artwork backdrop. */
-.trophy-display-stage--diamond .diamond-trophy__object {
+.trophy-display-stage--diamond .diamond-trophy__info {
   position: relative;
   z-index: 2;
-  display: grid;
-  width: 196px;
-  height: 196px;
-  flex: 0 0 196px;
-  place-items: center;
-  overflow: visible;
-  color: $trophy-diamond-light;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.72))
-    drop-shadow(0 0 12px rgba($trophy-diamond, 0.9))
-    drop-shadow(0 0 24px rgba($trophy-diamond-light, 0.55));
-  isolation: isolate;
-  transition: transform var(--display-duration) $ease-expressive;
+  display: flex;
+  width: 100%;
+  min-height: 144px;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $space-2;
+  padding: $space-3 $space-4;
+  background: transparent;
 }
-
-.trophy-display-stage--diamond .diamond-trophy__icon {
-  width: 190px;
-  height: 190px;
-  overflow: visible;
-  color: $trophy-diamond-light;
-  stroke-width: 1.8;
-}
-
-/* Edge fading is handled by the parent .diamond-trophy mask-image. */
 
 .trophy-display-stage--diamond .diamond-trophy.is-selected {
-  box-shadow: none;
+  color: $trophy-diamond-light;
 }
 
-/* Legible labels beneath the Diamond. */
 .trophy-display-stage--diamond .diamond-trophy strong {
   position: relative;
   z-index: 2;
@@ -614,7 +620,7 @@
 
   color: rgba(235, 251, 255, 0.94);
 
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
   font-weight: $font-weight-medium;
 
   letter-spacing: 0.12em;
@@ -632,7 +638,7 @@
 
   color: rgba(225, 242, 248, 0.94);
 
-  font-size: $font-size-sm;
+  font-size: $font-size-xs;
 
   letter-spacing: $letter-spacing-wide;
 
@@ -647,11 +653,9 @@
 
   overflow: hidden;
 
-  margin-top: $space-2;
-
   color: rgba(255, 255, 255, 0.9);
 
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
 
   text-align: center;
 
@@ -808,19 +812,18 @@
 
     flex-basis: 220px;
     width: 220px;
-    min-height: 300px;
+    min-height: 280px;
   }
 
-  .trophy-display-stage--diamond .diamond-trophy__object {
-    width: 166px;
-    height: 166px;
-    flex-basis: 166px;
+  .trophy-display-stage--diamond .diamond-trophy__visual {
+    height: 148px;
+    flex-basis: 148px;
   }
 
-  .trophy-display-stage--diamond .diamond-trophy__icon {
-    width: 160px;
-    height: 160px;
+  .trophy-display-stage--diamond .diamond-trophy__info {
+    min-height: 130px;
   }
+
 }
 
 @media (max-width: $breakpoint-sm) {
@@ -888,17 +891,6 @@
     flex-basis: 210px;
     width: 210px;
     min-height: 280px;
-  }
-
-  .trophy-display-stage--diamond .diamond-trophy__object {
-    width: 158px;
-    height: 158px;
-    flex-basis: 158px;
-  }
-
-  .trophy-display-stage--diamond .diamond-trophy__icon {
-    width: 152px;
-    height: 152px;
   }
 }
 

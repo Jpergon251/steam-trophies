@@ -33,10 +33,11 @@
     </div>
     <p class="steam-search__hint" aria-live="polite">
       <template v-if="loading">{{ $t("landing.searching") }}</template>
-      <template v-else-if="locale === 'es'">
-        Pulsa <kbd>Enter</kbd> para explorar
+      <template v-else>
+        {{ $t("landing.searchHintBefore") }}
+        <kbd>Enter</kbd>
+        {{ $t("landing.searchHintAfter") }}
       </template>
-      <template v-else> Press <kbd>Enter</kbd> to explore </template>
     </p>
   </form>
 </template>
@@ -44,9 +45,6 @@
 <script setup>
 import { ref } from "vue";
 import { ArrowUpRight, Search } from "@lucide/vue";
-import { useI18n } from "../../i18n";
-
-const { locale } = useI18n();
 
 defineProps({
   loading: {

@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { markRaw } from 'vue'
 import {
   getSteamAchievementSummary,
   getSteamAchievementSummaries,
@@ -430,6 +431,27 @@ function isSteamGameChanged(next, previous) {
     || previous.name !== next.name || previous.img_icon_url !== next.img_icon_url || previous.img_logo_url !== next.img_logo_url
 }
 
+function throwIfSyncAborted(signal) {
+  if (signal?.aborted) {
+    throw signal.reason || new DOMException('Profile synchronization was cancelled.', 'AbortError')
+  }
+}
+
+function waitForRetry(delay, signal) {
+  throwIfSyncAborted(signal)
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, delay)
+    const onAbort = () => {
+      window.clearTimeout(timeoutId)
+      reject(signal.reason || new DOMException('Profile synchronization was cancelled.', 'AbortError'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
 export const useSteamProfilesStore = defineStore('steamProfiles', {
   state: () => ({
     // profiles[steamId] = { profile, games, gamesCachedAt, cachedAt, hydratedAt }
@@ -443,6 +465,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
     hydration: {},
     // In-flight sync promises keyed by steamId (single sync per profile).
     syncPromises: {},
+    syncControllers: markRaw(new Map()),
     // In-flight progressive achievement refresh promises keyed by steamId.
     achievementPromises: {},
     // In-flight detail requests keyed by steamId and appid.
@@ -531,16 +554,39 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
      */
     syncProfile(steamId) {
       const id = String(steamId)
-      if (this.syncPromises[id]) return this.syncPromises[id]
+      const existing = this.syncPromises[id]
+      if (existing) {
+        if (this.syncControllers.get(id)?.signal.aborted) {
+          return existing.catch(() => {}).then(() => this.syncProfile(id))
+        }
+        return existing
+      }
 
-      const promise = this.runSync(id).finally(() => {
-        delete this.syncPromises[id]
+      const controller = new AbortController()
+      this.syncControllers.set(id, controller)
+      let promise
+      promise = this.runSync(id, controller.signal).finally(() => {
+        if (this.syncPromises[id] === promise) delete this.syncPromises[id]
+        if (this.syncControllers.get(id) === controller) this.syncControllers.delete(id)
       })
       this.syncPromises[id] = promise
       return promise
     },
 
-    async runSync(steamId) {
+    cancelProfileSync(steamId) {
+      const id = String(steamId)
+      const controller = this.syncControllers.get(id)
+      if (!controller) return
+
+      const sync = this.syncs[id]
+      if (sync?.active) {
+        this.syncs[id] = { ...sync, active: false, phase: 'paused' }
+        delete this.syncs[id].updatedAppIds
+      }
+      controller.abort()
+    },
+
+    async runSync(steamId, signal) {
       const id = String(steamId)
       const existing = this.profiles[id]
       const hadCache = Boolean(existing?.profile || existing?.games?.length)
@@ -562,9 +608,10 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
 
       try {
         const [profileResponse, owned] = await Promise.all([
-          getSteamProfile(id),
-          getSteamGames(id),
+          getSteamProfile(id, { signal }),
+          getSteamGames(id, { signal }),
         ])
+        throwIfSyncAborted(signal)
         const profile = profileResponse?.response?.players?.[0] || profileResponse
         const steamGames = owned?.response?.games
         if (!Array.isArray(steamGames)) throw new Error('Steam returned an invalid games collection.')
@@ -601,6 +648,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
         } else if (profileChanged) {
           await writeProfile(id, serializeProfile(profile))
         }
+        throwIfSyncAborted(signal)
 
         this.profiles[id] = {
           profile: profile || this.profiles[id]?.profile || null,
@@ -631,7 +679,8 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
         const forceRefresh = summaryCandidates.some((game) =>
           shouldForceAchievementRefresh(game),
         )
-        await this.refreshAchievementSummaries(id, summaryCandidates, forceRefresh)
+        await this.refreshAchievementSummaries(id, summaryCandidates, forceRefresh, signal)
+        throwIfSyncAborted(signal)
 
         const fallbackCandidates = selectUnknownFallbackGames(
           this.profiles[id]?.games || [],
@@ -642,7 +691,8 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
         sync.phase = 'fallback'
         sync.fallbackTotal = fallbackCandidates.length
         sync.fallbackProcessed = 0
-        await this.refreshUnknownAchievementSummaries(id, fallbackCandidates)
+        await this.refreshUnknownAchievementSummaries(id, fallbackCandidates, signal)
+        throwIfSyncAborted(signal)
 
         const syncedGames = this.profiles[id]?.games || []
         const unknownGames = syncedGames.filter(
@@ -675,6 +725,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           )
         }
       } catch (error) {
+        if (signal?.aborted) return
         this.errors[id] = error
         if (hadCache) {
           // Never destroy valid cached data because a refresh failed.
@@ -700,7 +751,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
     },
 
     /** Refreshes only stale summaries and commits every successful batch. */
-    async refreshAchievementSummaries(steamId, games, forceRefresh = false) {
+    async refreshAchievementSummaries(steamId, games, forceRefresh = false, signal) {
       const id = String(steamId)
       const profileState = this.profiles[id]
       const sync = this.syncs[id]
@@ -713,6 +764,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
         .sort((left, right) => Number(left.appid) - Number(right.appid))
 
       await runSequentialBatches(sortedGames, 100, async (batch, batchIndex) => {
+        throwIfSyncAborted(signal)
         const appIds = batch.map((game) => String(game.appid))
         const shouldForce = forceRefresh && batch.some((game) => shouldForceAchievementRefresh(game))
         let response
@@ -722,15 +774,19 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
             response = await getSteamAchievementSummaries(id, {
               forceRefresh: shouldForce,
               appIds,
+              signal,
             })
+            throwIfSyncAborted(signal)
             break
           } catch (error) {
+            if (signal?.aborted) throw error
             lastError = error
             if (attempt < SUMMARY_BATCH_RETRIES) {
-              await new Promise((resolve) => window.setTimeout(resolve, 750 * (attempt + 1)))
+              await waitForRetry(750 * (attempt + 1), signal)
             }
           }
         }
+        throwIfSyncAborted(signal)
 
         const markSyncError = async (game, message) => {
           const gameIndex = gameIndexes.get(String(game.appid))
@@ -767,6 +823,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           }
           if (failedEntries.length) {
             await writeAchievementSummaryBatch(id, failedEntries.map(({ game }) => game))
+            throwIfSyncAborted(signal)
             commitGameEntries(this, id, profileState, failedEntries)
           }
           console.warn(
@@ -792,6 +849,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           }
           if (failedEntries.length) {
             await writeAchievementSummaryBatch(id, failedEntries.map(({ game }) => game))
+            throwIfSyncAborted(signal)
             commitGameEntries(this, id, profileState, failedEntries)
           }
           sync.processed = Math.min(sync.total, sync.processed + batch.length)
@@ -901,12 +959,15 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           }
         }
         if (invalidEntries.length) {
+          throwIfSyncAborted(signal)
           await writeAchievementSummaryBatch(id, invalidEntries.map(({ game }) => game))
+          throwIfSyncAborted(signal)
         }
         if (updatedEntries.length) {
           const knownEntries = updatedEntries.filter((entry) => !entry.unknown)
           const unknownEntries = updatedEntries.filter((entry) => entry.unknown)
           if (knownEntries.length) {
+            throwIfSyncAborted(signal)
             await writeAchievementBatch(
               id,
               knownEntries.map(({ game }) => game),
@@ -914,11 +975,13 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
             )
           }
           if (unknownEntries.length) {
+            throwIfSyncAborted(signal)
             await writeAchievementSummaryBatch(
               id,
               unknownEntries.map(({ game }) => game),
             )
           }
+          throwIfSyncAborted(signal)
           commitGameEntries(this, id, profileState, updatedEntries)
           for (const { game } of updatedEntries) {
             if (game.achievementSummaryKnown) {
@@ -926,14 +989,17 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
             }
           }
         }
-        if (invalidEntries.length) commitGameEntries(this, id, profileState, invalidEntries)
+        if (invalidEntries.length) {
+          throwIfSyncAborted(signal)
+          commitGameEntries(this, id, profileState, invalidEntries)
+        }
         sync.processed = Math.min(sync.total, sync.processed + batch.length)
         sync.pending = Math.max(0, sync.pending - batch.length)
       })
     },
 
     /** Retries unknown games individually with a small worker pool. */
-    async refreshUnknownAchievementSummaries(steamId, appIds) {
+    async refreshUnknownAchievementSummaries(steamId, appIds, signal) {
       const id = String(steamId)
       const profileState = this.profiles[id]
       const sync = this.syncs[id]
@@ -947,12 +1013,14 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
         if (!pendingEntries.length) return flushPromise
         const entries = pendingEntries.splice(0)
         flushPromise = flushPromise.then(() => {
+          throwIfSyncAborted(signal)
           commitGameEntries(this, id, profileState, entries)
           sync.fallbackProcessed = completedFallbackCount
         })
         return flushPromise
       }
       const enqueueEntry = async (entry) => {
+        throwIfSyncAborted(signal)
         pendingEntries.push(entry)
         completedFallbackCount += 1
         if (pendingEntries.length >= 24) await flushPendingEntries()
@@ -960,6 +1028,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
 
       try {
         await runBoundedQueue(appIds, FALLBACK_CONCURRENCY, async (appId) => {
+        throwIfSyncAborted(signal)
         const gameIndex = gameIndexes.get(String(appId))
         if (gameIndex === undefined) return
         const current = profileState.games[gameIndex]
@@ -967,16 +1036,19 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
         let lastError
         for (let attempt = 0; attempt <= SUMMARY_BATCH_RETRIES; attempt += 1) {
           try {
-            result = await getSteamAchievementSummary(id, appId)
+            result = await getSteamAchievementSummary(id, appId, { signal })
+            throwIfSyncAborted(signal)
             break
           } catch (error) {
+            if (signal?.aborted) throw error
             lastError = error
             if (attempt < SUMMARY_BATCH_RETRIES) {
-              await new Promise((resolve) => window.setTimeout(resolve, 750 * (attempt + 1)))
+              await waitForRetry(750 * (attempt + 1), signal)
             }
           }
         }
 
+        throwIfSyncAborted(signal)
         const attemptedAt = Date.now()
         if (!result?.summary || !Array.isArray(result.trophies)) {
           sync.errorCount += 1
@@ -1052,6 +1124,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
           }
         }
       }, async (appId, error) => {
+        if (signal?.aborted) throw error
         const gameIndex = gameIndexes.get(String(appId))
         if (gameIndex === undefined) return
         const current = profileState.games[gameIndex]
@@ -1292,6 +1365,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
     /** Drops in-memory state for a profile. IndexedDB is intentionally untouched. */
     clearProfileMemory(steamId) {
       const id = String(steamId)
+      this.cancelProfileSync(id)
       delete this.profiles[id]
       delete this.profileStats[id]
       delete this.errors[id]

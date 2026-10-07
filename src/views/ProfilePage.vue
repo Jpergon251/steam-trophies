@@ -1,7 +1,7 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Diamond, ExternalLink, LoaderCircle, MoveLeft, Trophy, UserRound } from '@lucide/vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
 import { useSteamProfilesStore } from '../stores/steamProfiles.js'
 import TrophyModal from '../components/profile/TrophyModal.vue'
 import ProfileViewTabs from '../components/profile/ProfileViewTabs.vue'
@@ -37,9 +37,18 @@ const trophyStatsDisplay = computed(() =>
   profileStats.value.knownGames === 0 && games.value.length > 0 ? '—' : null,
 )
 const refreshError = computed(() => steamStore.errorFor(steamId.value) && profile.value ? t('profile.cacheStatus.cached') : '')
+const showRefreshError = ref(false)
 const gamesLoading = computed(() => gamesStatus.value === 'loading' || (!games.value.length && collectionStatus.value === 'loading'))
 const activeSteamId = ref(steamId.value)
 const isHydrating = computed(() => steamStore.isHydrating(steamId.value))
+const statsUpdating = computed(() => Boolean(syncState.value?.active || isHydrating.value))
+const profileSizeNotice = computed(() => {
+  if (!statsUpdating.value || games.value.length < 2500) return ''
+  return games.value.length >= 10000
+    ? t('profile.statsLoadingNotice.extremelyLarge')
+    : t('profile.statsLoadingNotice.large')
+})
+let refreshErrorTimeout
 
 const errorMessage = computed(() => {
   if (!errorCode.value) return ''
@@ -79,6 +88,20 @@ async function loadProfile(id) {
 }
 
 watch(steamId, (id) => loadProfile(id), { immediate: true })
+watch([steamId, refreshError], ([, message]) => {
+  clearTimeout(refreshErrorTimeout)
+  showRefreshError.value = Boolean(message)
+  if (message) {
+    refreshErrorTimeout = setTimeout(() => {
+      showRefreshError.value = false
+    }, 8000)
+  }
+})
+onBeforeUnmount(() => clearTimeout(refreshErrorTimeout))
+onBeforeRouteLeave((to) => {
+  const nextSteamId = String(to.params.steamId || '')
+  if (nextSteamId !== steamId.value) steamStore.cancelProfileSync(steamId.value)
+})
 watch(() => route.query.view, (view) => {
   if (view === 'games') selectedView.value = 'games'
 }, { immediate: true })
@@ -179,6 +202,10 @@ function findGameByAppId(appId) {
             {{ $t('profile.openSteamProfile') }}
             <ExternalLink :size="14" :stroke-width="1.7" aria-hidden="true" />
           </a>
+          <p v-if="statsUpdating" class="profile-page__sync-status" role="status">
+            <LoaderCircle :size="14" aria-hidden="true" />
+            {{ $t('header.syncing') }}
+          </p>
         </div>
 
         <div v-if="gamesStatus === 'error'" class="profile-page__inline-state">
@@ -188,15 +215,43 @@ function findGameByAppId(appId) {
           <section class="profile-overview" :aria-label="$t('profile.overview')">
             <div class="profile-overview__stats">
               <div class="profile-overview__stat">
-                <strong>{{ games.length.toLocaleString() }}</strong>
+                <strong class="profile-overview__stat-value">
+                  <Transition name="profile-stat-number" mode="out-in">
+                    <span :key="games.length">{{ games.length.toLocaleString() }}</span>
+                  </Transition>
+                </strong>
                 <span>{{ $t('profile.stats.games') }}</span>
               </div>
               <div class="profile-overview__stat">
-                <strong>{{ trophyStatsDisplay ?? unlockedTrophyCount.toLocaleString() }}</strong>
+                <strong class="profile-overview__stat-value">
+                  <Transition name="profile-stat-number" mode="out-in">
+                    <span :key="trophyStatsDisplay ?? unlockedTrophyCount">
+                      {{ trophyStatsDisplay ?? unlockedTrophyCount.toLocaleString() }}
+                    </span>
+                  </Transition>
+                  <LoaderCircle
+                    v-if="statsUpdating"
+                    class="profile-overview__stat-loader"
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                </strong>
                 <span>{{ $t('profile.stats.trophies') }}</span>
               </div>
               <div class="profile-overview__stat">
-                <strong>{{ trophyStatsDisplay ?? profileStats.completed.toLocaleString() }}</strong>
+                <strong class="profile-overview__stat-value">
+                  <Transition name="profile-stat-number" mode="out-in">
+                    <span :key="trophyStatsDisplay ?? profileStats.completed">
+                      {{ trophyStatsDisplay ?? profileStats.completed.toLocaleString() }}
+                    </span>
+                  </Transition>
+                  <LoaderCircle
+                    v-if="statsUpdating"
+                    class="profile-overview__stat-loader"
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                </strong>
                 <span>{{ $t('profile.stats.completed') }}</span>
               </div>
             </div>
@@ -218,6 +273,13 @@ function findGameByAppId(appId) {
               </span>
             </div>
             <p
+              v-if="profileSizeNotice"
+              class="profile-overview__notice profile-overview__notice--loading"
+              role="status"
+            >
+              {{ profileSizeNotice }}
+            </p>
+            <p
               v-if="collectionStatus === 'partial'"
               class="profile-page__cache-status profile-overview__notice"
               role="status"
@@ -232,13 +294,7 @@ function findGameByAppId(appId) {
               <h2>{{ $t('profile.cabinet.title') }}</h2>
               <span aria-hidden="true" />
             </div>
-            <p v-if="refreshError" class="profile-page__cache-status" role="status">{{ refreshError }}</p>
-            <p v-else-if="isHydrating" class="profile-page__cache-status" role="status">
-              {{ $t('profile.cacheStatus.loadingCache') }}
-            </p>
-            <p v-else-if="syncState?.active" class="profile-page__cache-status" role="status">
-              {{ $t('header.syncing') }}
-            </p>
+            <p v-if="showRefreshError && refreshError" class="profile-page__cache-status" role="status">{{ refreshError }}</p>
             <TrophyCabinet
               v-if="selectedView === 'display'"
               :load-trophy-window="loadTrophyWindow"

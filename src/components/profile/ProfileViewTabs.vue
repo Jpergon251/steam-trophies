@@ -4,7 +4,7 @@ defineEmits(["update:modelValue"]);
 </script>
 
 <template>
-  <nav class="profile-view-tabs" aria-label="Collection views" role="tablist">
+  <nav class="profile-view-tabs" :aria-label="$t('profile.tabs.aria')" role="tablist">
     <button
       v-for="tab in ['display', 'games']"
       :key="tab"

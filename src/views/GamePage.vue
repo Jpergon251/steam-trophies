@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Diamond, LockKeyhole, Search, Trophy } from '@lucide/vue'
 import { getTrophyTier } from '../data/trophyTiers.js'
-import { RouterLink, useRoute } from 'vue-router'
+import { onBeforeRouteLeave, RouterLink, useRoute } from 'vue-router'
 import { useSteamProfilesStore } from '../stores/steamProfiles.js'
 import { useI18n } from '../i18n'
 
@@ -82,27 +82,6 @@ const visibleAchievements = computed(() => {
     if (!query) return true
     return `${achievement.name || ''} ${achievement.description || ''}`.toLocaleLowerCase().includes(query)
   })
-  const totalPages = computed(() => Math.ceil(visibleAchievements.value.length / pageSize))
-  const paginatedAchievements = computed(() => visibleAchievements.value.slice(
-    (currentPage.value - 1) * pageSize,
-    currentPage.value * pageSize,
-  ))
-
-  watch([activeFilter, search, sortBy], () => {
-    currentPage.value = 1
-  })
-
-  watch(totalPages, (pages) => {
-    if (pages > 0 && currentPage.value > pages) currentPage.value = pages
-  })
-
-  function changeAchievementPage(page) {
-    currentPage.value = Math.min(totalPages.value, Math.max(1, page))
-    document.querySelector('.achievement-archive')?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-    })
-  }
   if (sortBy.value === 'steam') return filtered
   const sourceOrder = new Map(achievements.value.map((achievement, index) => [achievement.apiname || `${achievement.name}-${index}`, index]))
   const originalIndex = (achievement) => sourceOrder.get(achievement.apiname || `${achievement.name}-${achievements.value.indexOf(achievement)}`) ?? 0
@@ -135,6 +114,28 @@ const visibleAchievements = computed(() => {
   })
 })
 
+const totalPages = computed(() => Math.ceil(visibleAchievements.value.length / pageSize))
+const paginatedAchievements = computed(() => visibleAchievements.value.slice(
+  (currentPage.value - 1) * pageSize,
+  currentPage.value * pageSize,
+))
+
+watch([activeFilter, search, sortBy], () => {
+  currentPage.value = 1
+})
+
+watch(totalPages, (pages) => {
+  if (pages > 0 && currentPage.value > pages) currentPage.value = pages
+})
+
+function changeAchievementPage(page) {
+  currentPage.value = Math.min(totalPages.value, Math.max(1, page))
+  document.querySelector('.achievement-archive')?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  })
+}
+
 const backQuery = computed(() => {
   const query = { view: 'games' }
   for (const key of ['q', 'filter', 'sort', 'page']) {
@@ -157,6 +158,11 @@ watch([steamId, appid], async ([id, gameId]) => {
     detailsPending.value = false
   }
 }, { immediate: true })
+
+onBeforeRouteLeave((to) => {
+  const nextSteamId = String(to.params.steamId || '')
+  if (nextSteamId !== steamId.value) steamStore.cancelProfileSync(steamId.value)
+})
 
 onBeforeUnmount(() => {
   steamStore.evictGameDetails(steamId.value)
@@ -206,7 +212,7 @@ function markAchievementIconFailed(achievement, index) {
               <ArrowLeft :size="17" aria-hidden="true" /> {{ $t('game.backToGames') }}
             </RouterLink>
             <div class="game-archive-header__content">
-              <p class="game-page__eyebrow">{{ $t('game.eyebrow', { name: profile?.personaname || 'STEAM PLAYER' }) }}</p>
+              <p class="game-page__eyebrow">{{ $t('game.eyebrow', { name: profile?.personaname || $t('game.defaultPlayer') }) }}</p>
               <h1>{{ game.name }}</h1>
               <div class="game-archive-header__completion">
                 <strong>{{ completion }}<span>%</span></strong>
@@ -216,7 +222,7 @@ function markAchievementIconFailed(achievement, index) {
                   <span class="game-archive-header__count">{{ counts.unlocked }} / {{ counts.total }} {{ $t('game.achievementsShort') }}</span>
                 </div>
               </div>
-              <div class="game-archive-header__progress" role="progressbar" :aria-valuenow="completion" aria-valuemin="0" aria-valuemax="100" :aria-label="`${game.name} achievement completion`">
+              <div class="game-archive-header__progress" role="progressbar" :aria-valuenow="completion" aria-valuemin="0" aria-valuemax="100" :aria-label="$t('profile.games.completionPercentAria', { name: game.name, percent: completion })">
                 <span :class="{ 'is-diamond': isDiamond }" :style="{ width: `${completion}%` }" />
               </div>
               <p v-if="sync?.active" class="game-archive-header__updating">{{ $t('game.updatingAchievements') }}</p>
@@ -317,13 +323,13 @@ function markAchievementIconFailed(achievement, index) {
                   v-if="achievement.icon && !achievementIconFailed(achievement, index)"
                   class="achievement-row__icon"
                   :src="achievement.icon"
-                  :alt="`${achievement.name} icon`"
+                  :alt="$t('game.achievementIconAlt', { name: achievement.name })"
                   loading="lazy"
                   @error="markAchievementIconFailed(achievement, index)"
                 />
                 <Trophy v-else class="achievement-row__fallback" :size="38" :stroke-width="1.2" aria-hidden="true" />
-                <span v-if="isUnlocked(achievement)" class="achievement-row__earned-mark" aria-label="Unlocked"><Check :size="14" /></span>
-                <span v-else class="achievement-row__locked-mark" aria-label="Locked"><LockKeyhole :size="13" /></span>
+                <span v-if="isUnlocked(achievement)" class="achievement-row__earned-mark" :aria-label="$t('profile.modal.unlocked')"><Check :size="14" /></span>
+                <span v-else class="achievement-row__locked-mark" :aria-label="$t('profile.modal.lockedAria')"><LockKeyhole :size="13" /></span>
               </div>
               <div class="achievement-row__body">
                 <div class="achievement-row__title-line">

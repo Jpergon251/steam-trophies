@@ -20,7 +20,7 @@
             href="https://github.com/Jpergon251/steam-trophies"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="GitHub repository"
+            :aria-label="$t('footer.githubAria')"
           >
             <svg
               class="app-footer__icon"
