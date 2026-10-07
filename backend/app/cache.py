@@ -1,6 +1,6 @@
 import asyncio
 import copy
-import json
+import sys
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -22,6 +22,36 @@ class _CacheEntry:
 @dataclass(frozen=True)
 class _NegativeHttpStatus:
     status_code: int
+
+
+def _estimate_size_bytes(value: Any, limit: int) -> int:
+    seen: set[int] = set()
+
+    def visit(item: Any) -> int:
+        item_id = id(item)
+        if item_id in seen:
+            return 0
+        seen.add(item_id)
+        size = sys.getsizeof(item)
+        if size >= limit:
+            return limit + 1
+        if isinstance(item, dict):
+            children = (
+                child
+                for key, value in item.items()
+                for child in (key, value)
+            )
+        elif isinstance(item, (list, tuple, set, frozenset)):
+            children = iter(item)
+        else:
+            return size
+        for child in children:
+            size += visit(child)
+            if size > limit:
+                return limit + 1
+        return size
+
+    return visit(value)
 
 
 class AsyncTTLCache:
@@ -77,15 +107,10 @@ class AsyncTTLCache:
         if ttl <= 0:
             await self.delete(key)
             return
+        size_bytes = _estimate_size_bytes(value, self.max_bytes)
+        if size_bytes > self.max_bytes:
+            return
         cached_value = copy.deepcopy(value)
-        try:
-            size_bytes = len(json.dumps(
-                cached_value,
-                separators=(",", ":"),
-                ensure_ascii=False,
-            ).encode("utf-8"))
-        except (TypeError, ValueError):
-            size_bytes = 128
 
         async with self._lock:
             now = time.monotonic()
@@ -99,8 +124,6 @@ class AsyncTTLCache:
             previous = self._entries.pop(key, None)
             if previous:
                 self._size_bytes -= previous.size_bytes
-            if size_bytes > self.max_bytes:
-                return
             self._entries[key] = _CacheEntry(cached_value, now + ttl, size_bytes)
             self._size_bytes += size_bytes
             self._entries.move_to_end(key)

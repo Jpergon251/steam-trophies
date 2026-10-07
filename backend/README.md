@@ -136,21 +136,24 @@ include its Steam icon; the profile summary path does not request game schemas.
 ## Resource controls
 
 - One reusable `httpx.AsyncClient` is created and closed by FastAPI lifespan.
-- Connection pool defaults: 16 total connections, 8 keep-alive connections.
-- A process-wide `asyncio.Semaphore` allows at most 8 simultaneous Steam
+- Connection pool defaults: 8 total connections, 4 keep-alive connections.
+- A process-wide `asyncio.Semaphore` allows at most 4 simultaneous Steam
   requests. This limit is per Render process/instance.
 - Steam connect/read/write/pool timeouts default to 5/20/10/5 seconds.
 - At most two retries are made for 429, 500, 502, 503, 504 and network/timeout
   errors, with exponential backoff and jitter. Other HTTP statuses are not
   retried. Upstream 400/403/404 responses are briefly negatively cached.
-- In-memory cache uses TTL expiration, LRU eviction, a 64 MiB serialized-size
-  cap, and at most 4,096 entries. This bounds cached payloads; Python object
-  overhead is additional. Per-process defaults are profile 5 minutes, owned games 10 minutes,
+- In-memory cache uses TTL expiration, LRU eviction, an estimated 16 MiB
+  Python-object-size cap, and at most 2,048 entries. Oversized entries are not
+  copied into the cache. Per-process defaults are profile 5 minutes, owned games 10 minutes,
   achievements 45 minutes, global percentages 60 minutes, achievement
   unavailability 5 minutes, and other negative HTTP responses 30 seconds.
 - Concurrent misses for the same cache key share one async task. Cache values
   are copied on read/write to prevent one response's normalization from
   mutating other callers' cached values.
+- Resource settings are capped per process even if Render environment values
+  request higher limits: 4 upstream requests, 8 HTTP connections, 16 MiB cache,
+  2,048 cache entries, and 100 AppIDs per Top Achievements batch.
 - In-memory fixed-window limits default to 20 searches, 30 profile lookups,
   30 library requests, and 1,200 achievement requests per IP per minute.
   Limits and cached data are process-local; they reset on restart and are not
@@ -163,13 +166,13 @@ the defaults and supported names:
 
 - `STEAM_API_KEY`
 - `STEAM_MAX_CONCURRENCY`, `STEAM_MAX_RETRIES`
-- `STEAM_MAX_CONNECTIONS`, `STEAM_MAX_KEEPALIVE_CONNECTIONS`
+- `STEAM_MAX_CONNECTIONS` (maximum 8), `STEAM_MAX_KEEPALIVE_CONNECTIONS` (maximum 4)
 - `STEAM_TIMEOUT_CONNECT`, `STEAM_TIMEOUT_READ`, `STEAM_TIMEOUT_WRITE`,
   `STEAM_TIMEOUT_POOL`
 - `CACHE_PROFILE_TTL`, `CACHE_GAMES_TTL`, `CACHE_ACHIEVEMENTS_TTL`,
   `CACHE_GLOBAL_ACHIEVEMENTS_TTL`, `CACHE_NEGATIVE_TTL`,
   `CACHE_NEGATIVE_ACHIEVEMENTS_TTL`, `CACHE_MAX_ENTRIES`, `CACHE_MAX_BYTES`
-- `TOP_ACHIEVEMENTS_MAX`, `TOP_ACHIEVEMENTS_BATCH_SIZE`
+- `TOP_ACHIEVEMENTS_MAX`, `TOP_ACHIEVEMENTS_BATCH_SIZE` (maximum 100)
 - `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_SEARCH_PER_MINUTE`,
   `RATE_LIMIT_PROFILE_PER_MINUTE`, `RATE_LIMIT_GAMES_PER_MINUTE`,
   `RATE_LIMIT_ACHIEVEMENTS_PER_MINUTE`

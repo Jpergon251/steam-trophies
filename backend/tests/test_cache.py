@@ -55,6 +55,19 @@ class AsyncTTLCacheTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await small_cache.get("large"))
         self.assertEqual((await small_cache.stats())["size_bytes"], 0)
 
+    async def test_cached_values_are_copied_and_accounted_for_by_object_size(self):
+        value = {"nested": ["original"]}
+        await self.cache.set("mutable", value, 30)
+        value["nested"][0] = "changed"
+        cached = await self.cache.get("mutable")
+        cached["nested"][0] = "caller mutation"
+
+        self.assertEqual(
+            await self.cache.get("mutable"),
+            {"nested": ["original"]},
+        )
+        self.assertGreater((await self.cache.stats())["size_bytes"], 0)
+
     async def test_concurrent_callers_share_one_loader(self):
         started = asyncio.Event()
         release = asyncio.Event()

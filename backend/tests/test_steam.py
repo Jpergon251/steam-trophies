@@ -707,9 +707,9 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
                 accumulated_total = 0
                 with (
                     patch("app.services.steam.steam_request", new=AsyncMock(side_effect=respond)),
-                    patch.object(settings, "top_achievements_batch_size", 350),
+                    patch.object(settings, "top_achievements_batch_size", 100),
                 ):
-                    batch_count = (game_count + 349) // 350
+                    batch_count = (game_count + 99) // 100
                     for batch_index in range(batch_count):
                         page = await get_achievement_summaries(
                             self.steam_id,
@@ -717,8 +717,8 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
                         )
                         self.assertEqual(page["batch_count"], batch_count)
                         self.assertEqual(page["batch_index"], batch_index)
-                        self.assertEqual(page["batch_size"], 350)
-                        self.assertLessEqual(len(page["games"]), 350)
+                        self.assertEqual(page["batch_size"], 100)
+                        self.assertLessEqual(len(page["games"]), 100)
                         self.assertEqual(page["trophies"], [])
                         self.assertTrue(
                             all("achievements" not in game for game in page["games"]),
@@ -732,7 +732,7 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(accumulated_games, game_count)
                 self.assertEqual(accumulated_total, achievement_total)
 
-    async def test_configured_batch_size_is_capped_to_verified_get_url_limit(self):
+    async def test_configured_batch_size_is_capped_for_response_memory(self):
         owned = {
             "response": {
                 "games": [{"appid": app_id, "name": str(app_id)} for app_id in range(1, 501)],
@@ -767,11 +767,11 @@ class AchievementSummaryTests(unittest.IsolatedAsyncioTestCase):
             call for call in request.await_args_list
             if "GetTopAchievementsForGames" in call.args[0]
         )
-        self.assertEqual(page["batch_size"], 350)
-        self.assertEqual(page["batch_count"], 2)
+        self.assertEqual(page["batch_size"], 100)
+        self.assertEqual(page["batch_count"], 5)
         self.assertEqual(
             len([key for key in top_call.args[1] if key.startswith("appids[")]),
-            350,
+            100,
         )
 
     async def test_414_top_request_splits_chunk_without_changing_page_size(self):

@@ -260,6 +260,35 @@
   padding: 0;
   list-style: none;
 }
+.achievement-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-4;
+  padding: $space-5 0;
+  color: $color-text-tertiary;
+  font-family: $font-mono;
+  font-size: $font-size-sm;
+}
+.achievement-pagination button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid $glass-white-10;
+  border-radius: $radius-sm;
+  background: $glass-white-02;
+  color: $color-text-secondary;
+  cursor: pointer;
+}
+.achievement-pagination button:hover:not(:disabled) {
+  border-color: $glass-white-20;
+  color: $color-text-primary;
+}
+.achievement-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .achievement-row {
   --achievement-accent: var(--modal-tier, #{$color-text-tertiary});
   position: relative;

@@ -712,7 +712,7 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
         .slice()
         .sort((left, right) => Number(left.appid) - Number(right.appid))
 
-      await runSequentialBatches(sortedGames, 350, async (batch, batchIndex) => {
+      await runSequentialBatches(sortedGames, 100, async (batch, batchIndex) => {
         const appIds = batch.map((game) => String(game.appid))
         const shouldForce = forceRefresh && batch.some((game) => shouldForceAchievementRefresh(game))
         let response
@@ -1185,8 +1185,10 @@ export const useSteamProfilesStore = defineStore('steamProfiles', {
     async loadGameAchievementDetails(steamId, appId) {
       const id = String(steamId)
       const key = `${id}:${String(appId)}`
-      if (!this.profiles[id]?.hydratedAt) await this.syncProfile(id)
-      else if (this.syncPromises[id]) await this.syncPromises[id]
+      if (!this.profiles[id]?.hydratedAt) {
+        await this.hydrateFromCache(id)
+        if (!this.profiles[id]?.hydratedAt) await this.syncProfile(id)
+      }
       const game = this.profiles[id]?.games.find((item) => String(item.appid) === String(appId))
       if (
         !game ||

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { ArrowLeft, Check, Diamond, LockKeyhole, Search, Trophy } from '@lucide/vue'
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Diamond, LockKeyhole, Search, Trophy } from '@lucide/vue'
 import { getTrophyTier } from '../data/trophyTiers.js'
 import { RouterLink, useRoute } from 'vue-router'
 import { useSteamProfilesStore } from '../stores/steamProfiles.js'
@@ -52,6 +52,8 @@ const hasGlobalRarity = (achievement) => achievement.global_percent !== null && 
 const activeFilter = ref('all')
 const search = ref('')
 const sortBy = ref('steam')
+const currentPage = ref(1)
+const pageSize = 100
 
 const filterOptions = computed(() => [
   { key: 'all', label: t('game.filters.all'), count: counts.value.total },
@@ -80,6 +82,27 @@ const visibleAchievements = computed(() => {
     if (!query) return true
     return `${achievement.name || ''} ${achievement.description || ''}`.toLocaleLowerCase().includes(query)
   })
+  const totalPages = computed(() => Math.ceil(visibleAchievements.value.length / pageSize))
+  const paginatedAchievements = computed(() => visibleAchievements.value.slice(
+    (currentPage.value - 1) * pageSize,
+    currentPage.value * pageSize,
+  ))
+
+  watch([activeFilter, search, sortBy], () => {
+    currentPage.value = 1
+  })
+
+  watch(totalPages, (pages) => {
+    if (pages > 0 && currentPage.value > pages) currentPage.value = pages
+  })
+
+  function changeAchievementPage(page) {
+    currentPage.value = Math.min(totalPages.value, Math.max(1, page))
+    document.querySelector('.achievement-archive')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }
   if (sortBy.value === 'steam') return filtered
   const sourceOrder = new Map(achievements.value.map((achievement, index) => [achievement.apiname || `${achievement.name}-${index}`, index]))
   const originalIndex = (achievement) => sourceOrder.get(achievement.apiname || `${achievement.name}-${achievements.value.indexOf(achievement)}`) ?? 0
@@ -143,6 +166,7 @@ watch(appid, () => {
   activeFilter.value = 'all'
   search.value = ''
   sortBy.value = 'steam'
+  currentPage.value = 1
   failedAchievementIcons.value = new Set()
 })
 
@@ -276,8 +300,8 @@ function markAchievementIconFailed(achievement, index) {
           </div>
           <ol v-else class="achievement-list">
             <li
-              v-for="(achievement, index) in visibleAchievements"
-              :key="achievement.apiname || `${achievement.name}-${index}`"
+              v-for="(achievement, index) in paginatedAchievements"
+              :key="achievement.apiname || `${achievement.name}-${(currentPage - 1) * pageSize + index}`"
               class="achievement-row"
               :class="[`achievement-row--${achievementTier(achievement)}`, `trophy-tier--${achievementTier(achievement)}`, { 'achievement-row--locked': !isUnlocked(achievement) }]"
             >
@@ -323,6 +347,29 @@ function markAchievementIconFailed(achievement, index) {
               </div>
             </li>
           </ol>
+          <nav
+            v-if="totalPages > 1"
+            class="achievement-pagination"
+            :aria-label="$t('game.pagesAria')"
+          >
+            <button
+              type="button"
+              :disabled="currentPage === 1"
+              :aria-label="$t('game.previousPage')"
+              @click="changeAchievementPage(currentPage - 1)"
+            >
+              <ChevronLeft :size="16" />
+            </button>
+            <span>{{ $t('game.pageOf', { page: currentPage, total: totalPages }) }}</span>
+            <button
+              type="button"
+              :disabled="currentPage === totalPages"
+              :aria-label="$t('game.nextPage')"
+              @click="changeAchievementPage(currentPage + 1)"
+            >
+              <ChevronRight :size="16" />
+            </button>
+          </nav>
         </section>
       </template>
     </div>
