@@ -1,0 +1,21 @@
+@media (prefers-reduced-motion: reduce) {
+  .ambient-particle {
+    animation: none;
+    opacity: 0.12;
+    transform: none;
+  }
+
+  .app-layout::before,
+  .app-layout::after {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

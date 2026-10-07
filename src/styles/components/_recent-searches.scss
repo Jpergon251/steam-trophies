@@ -243,6 +243,9 @@
 }
 
 @media (max-width: $breakpoint-sm) {
+  .recent-searches__frame {
+    backdrop-filter: blur(6px) saturate($glass-saturation);
+  }
   .recent-searches {
     margin-top: $space-5;
 

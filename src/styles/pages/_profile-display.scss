@@ -273,6 +273,19 @@
       border-radius: inherit;
       content: "";
     }
+
+    &::after {
+      position: absolute;
+      z-index: 2;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(115deg, transparent 28%, rgba(255, 255, 255, 0.12) 48%, transparent 68%);
+      content: "";
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-45%);
+      transition: opacity 240ms ease, transform 650ms ease;
+    }
   }
 
   &__emblem {
@@ -543,6 +556,21 @@
   background: transparent;
 }
 
+.trophy-display-stage--diamond .diamond-trophy__visual::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: linear-gradient(112deg, transparent 32%, rgba(226, 248, 255, 0.13) 48%, transparent 64%);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-60%);
+}
+
+.trophy-display-stage--diamond .diamond-trophy.is-selected .diamond-trophy__visual::after {
+  animation: diamond-display-shine 1.15s 180ms ease-out both;
+}
+
 .trophy-display-stage--diamond .diamond-trophy__artwork {
   position: absolute;
   inset: 0;
@@ -582,15 +610,21 @@
   top: 12px;
   right: 12px;
   display: grid;
-  width: 48px;
-  height: 48px;
+  width: 54px;
+  height: 54px;
   place-items: center;
   border: 1px solid rgba($trophy-diamond-light, 0.48);
   border-radius: 50%;
   background: rgba(8, 18, 24, 0.92);
   color: $trophy-diamond-light;
-  filter: drop-shadow(0 0 8px rgba($trophy-diamond, 0.58));
+  filter: drop-shadow(0 0 10px rgba($trophy-diamond, 0.64));
+  transition: filter 260ms ease, transform 260ms ease;
   pointer-events: none;
+}
+
+.trophy-display-stage--diamond .diamond-trophy.is-selected .diamond-trophy__tier-badge {
+  filter: drop-shadow(0 0 12px rgba($trophy-diamond, 0.72));
+  transform: scale(1.04);
 }
 
 .trophy-display-stage--diamond .diamond-trophy__info {
@@ -638,7 +672,7 @@
 
   color: rgba(225, 242, 248, 0.94);
 
-  font-size: $font-size-xs;
+  font-size: $font-size-sm;
 
   letter-spacing: $letter-spacing-wide;
 
@@ -795,6 +829,13 @@
   .trophy-display-stage {
     padding-inline: 34px;
   }
+  .trophy-display-stage::before {
+    filter: blur(26px);
+  }
+  .trophy-card::before {
+    filter: blur(24px);
+    opacity: 0.42;
+  }
   .trophy-shelf__track {
     gap: clamp(22px, 4vw, 36px);
   }
@@ -824,6 +865,29 @@
     min-height: 130px;
   }
 
+  .trophy-display-stage--diamond .diamond-trophy__tier-badge {
+    width: 50px;
+    height: 50px;
+  }
+
+  .trophy-display-stage--diamond .diamond-trophy__tier-badge svg {
+    width: 28px;
+    height: 28px;
+  }
+
+}
+
+@keyframes diamond-display-shine {
+  0% { opacity: 0; transform: translateX(-60%); }
+  25% { opacity: 0.8; }
+  100% { opacity: 0; transform: translateX(60%); }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .trophy-card:hover .trophy-card__icon-wrap::after {
+    opacity: 0.7;
+    transform: translateX(45%);
+  }
 }
 
 @media (max-width: $breakpoint-sm) {

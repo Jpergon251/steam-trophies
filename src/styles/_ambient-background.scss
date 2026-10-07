@@ -1,0 +1,171 @@
+@use './abstracts/variables' as *;
+
+.app-layout {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse at 45% 8%, rgba(42, 36, 32, 0.09), transparent 55%),
+    linear-gradient(180deg, rgba(2, 2, 2, 0.08), transparent 32%, rgba(2, 2, 2, 0.2)),
+    $color-bg-primary;
+}
+
+.app-main {
+  position: relative;
+  z-index: 2;
+}
+
+.ambient-particles {
+  position: fixed;
+  z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ambient-particle {
+  --particle-color: rgba(228, 203, 175, 0.9);
+  --particle-glow-color: rgba(220, 190, 158, 0.36);
+  --peak-opacity: 0.3;
+
+  position: absolute;
+  top: var(--particle-y);
+  left: var(--particle-x);
+  width: var(--particle-size);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--particle-color);
+  box-shadow: 0 0 7px var(--particle-glow-color);
+  opacity: 0;
+  animation: ambient-particle-drift var(--particle-duration) linear var(--particle-delay) infinite;
+}
+
+.ambient-particle--bright {
+  background: color-mix(in srgb, var(--particle-color) 82%, white);
+  box-shadow:
+    0 0 5px var(--particle-glow-color),
+    0 0 11px color-mix(in srgb, var(--particle-glow-color) 78%, transparent);
+}
+
+@keyframes ambient-particle-drift {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.68);
+  }
+
+  14% {
+    opacity: calc(var(--peak-opacity) * 0.58);
+  }
+
+  30% {
+    opacity: calc(var(--peak-opacity) * 0.72);
+    transform: translate3d(var(--particle-turn-one-x), var(--particle-turn-one-y), 0) scale(0.86);
+  }
+
+  48% {
+    opacity: var(--peak-opacity);
+  }
+
+  68% {
+    opacity: calc(var(--peak-opacity) * 0.68);
+    transform: translate3d(var(--particle-turn-two-x), var(--particle-turn-two-y), 0) scale(1.03);
+  }
+
+  84% {
+    opacity: calc(var(--peak-opacity) * 0.86);
+  }
+
+  92% {
+    opacity: calc(var(--peak-opacity) * 0.5);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--particle-drift-x), var(--particle-drift-y), 0) scale(0.76);
+  }
+}
+
+.app-layout::before,
+.app-layout::after {
+  position: fixed;
+  z-index: 0;
+  inset: -24%;
+  content: "";
+  pointer-events: none;
+}
+
+.app-layout::before {
+  background:
+    radial-gradient(ellipse at 14% 34%, rgba(64, 54, 48, 0.16), transparent 38%),
+    radial-gradient(ellipse at 77% 68%, rgba(50, 46, 42, 0.14), transparent 40%),
+    radial-gradient(ellipse at 43% 82%, rgba(39, 37, 34, 0.15), transparent 43%),
+    linear-gradient(116deg, transparent 17%, rgba(69, 58, 50, 0.05) 36%, rgba(48, 44, 40, 0.07) 49%, transparent 71%);
+  filter: blur(28px);
+}
+
+.app-layout::after {
+  background:
+    radial-gradient(ellipse at 21% 56%, rgba(62, 52, 45, 0.1), transparent 29%),
+    radial-gradient(ellipse at 82% 36%, rgba(53, 47, 42, 0.09), transparent 28%),
+    linear-gradient(180deg, rgba(2, 2, 2, 0.16), transparent 24% 76%, rgba(2, 2, 2, 0.24));
+  filter: blur(1.8px);
+  opacity: 0.42;
+}
+
+.page-transition-enter-active,
+.page-transition-leave-active {
+  transition: opacity 220ms ease;
+}
+
+.page-transition-enter-from,
+.page-transition-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 1024px) {
+  .app-layout::before {
+    filter: blur(24px);
+  }
+
+  .app-layout::after {
+    filter: blur(2px);
+  }
+}
+
+@media (max-width: 600px) {
+  .app-layout {
+    background:
+      radial-gradient(ellipse at 50% 18%, rgba(42, 36, 32, 0.07), transparent 54%),
+      linear-gradient(180deg, rgba(2, 2, 2, 0.08), transparent 42%, rgba(2, 2, 2, 0.18)),
+      $color-bg-primary;
+  }
+
+  .app-layout::before,
+  .app-layout::after {
+    inset: -18%;
+  }
+
+  .app-layout::before {
+    filter: blur(14px);
+    opacity: 0.6;
+  }
+
+  .app-layout::after {
+    filter: blur(1.8px);
+    opacity: 0.46;
+  }
+
+  .ambient-particle {
+    --particle-drift-x: var(--particle-drift-x-mobile);
+    --particle-drift-y: var(--particle-drift-y-mobile);
+    --particle-turn-one-x: var(--particle-turn-one-x-mobile);
+    --particle-turn-one-y: var(--particle-turn-one-y-mobile);
+    --particle-turn-two-x: var(--particle-turn-two-x-mobile);
+    --particle-turn-two-y: var(--particle-turn-two-y-mobile);
+  }
+
+  .ambient-particle:nth-child(n + 13) {
+    display: none;
+  }
+}

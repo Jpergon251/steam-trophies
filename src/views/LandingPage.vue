@@ -40,7 +40,7 @@
           <span>{{ $t('landing.tiers.gold') }}</span>
         </div>
         <div class="landing__tier landing__tier--diamond trophy-tier--diamond">
-          <Diamond class="landing__tier-icon" :size="17" :stroke-width="1.5" />
+          <Diamond class="landing__tier-icon" :size="17" fill="currentColor" :stroke-width="1.5" />
           <span>{{ $t('landing.tiers.diamond') }}</span>
         </div>
       </div>

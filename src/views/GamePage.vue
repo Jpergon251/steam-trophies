@@ -217,7 +217,7 @@ function markAchievementIconFailed(achievement, index) {
               <div class="game-archive-header__completion">
                 <strong>{{ completion }}<span>%</span></strong>
                 <div class="game-archive-header__completion-info">
-                  <span v-if="isDiamond" class="game-archive-header__diamond"><Diamond :size="15" /> {{ $t('game.diamondAchieved') }}</span>
+                  <span v-if="isDiamond" class="game-archive-header__diamond"><Diamond :size="15" fill="currentColor" /> {{ $t('game.diamondAchieved') }}</span>
                   <span v-else>{{ $t('game.achievementsRemaining', { count: counts.locked }) }}</span>
                   <span class="game-archive-header__count">{{ counts.unlocked }} / {{ counts.total }} {{ $t('game.achievementsShort') }}</span>
                 </div>
@@ -228,7 +228,7 @@ function markAchievementIconFailed(achievement, index) {
               <p v-if="sync?.active" class="game-archive-header__updating">{{ $t('game.updatingAchievements') }}</p>
               <div v-if="isDiamond" class="game-diamond-exhibit" :aria-label="$t('game.diamondAchieved')">
                 <span class="game-diamond-exhibit__aura" aria-hidden="true" />
-                <span class="game-diamond-exhibit__medal" aria-hidden="true"><Diamond :size="24" :stroke-width="1.35" /></span>
+                <span class="game-diamond-exhibit__medal" aria-hidden="true"><Diamond :size="24" fill="currentColor" :stroke-width="1.35" /></span>
                 <span class="game-diamond-exhibit__copy">
                   <strong>{{ $t('game.diamondTrophy') }}</strong>
                   <small>{{ $t('game.perfectSet') }}</small>
@@ -246,10 +246,10 @@ function markAchievementIconFailed(achievement, index) {
             <span class="game-progress-summary__caption">{{ $t('game.stats.unlocked') }}</span>
           </div>
           <div class="game-progress-summary__tiers" :aria-label="$t('game.trophyCollection')">
-            <div class="game-tier game-tier--bronze"><span class="game-tier__medal" aria-hidden="true">●</span><strong>{{ unlockedTierCounts.bronze }}</strong><span>{{ $t('game.tiers.bronze') }}</span></div>
-            <div class="game-tier game-tier--silver"><span class="game-tier__medal" aria-hidden="true">●</span><strong>{{ unlockedTierCounts.silver }}</strong><span>{{ $t('game.tiers.silver') }}</span></div>
-            <div class="game-tier game-tier--gold"><span class="game-tier__medal" aria-hidden="true">●</span><strong>{{ unlockedTierCounts.gold }}</strong><span>{{ $t('game.tiers.gold') }}</span></div>
-            <div v-if="isDiamond" class="game-tier game-tier--diamond"><Diamond :size="19" aria-hidden="true"/><strong>1</strong><span>{{ $t('game.tiers.diamond') }}</span></div>
+            <div class="game-tier game-tier--bronze"><Trophy :size="23" :stroke-width="1.8" aria-hidden="true" /><strong>{{ unlockedTierCounts.bronze }}</strong><span>{{ $t('game.tiers.bronze') }}</span></div>
+            <div class="game-tier game-tier--silver"><Trophy :size="23" :stroke-width="1.8" aria-hidden="true" /><strong>{{ unlockedTierCounts.silver }}</strong><span>{{ $t('game.tiers.silver') }}</span></div>
+            <div class="game-tier game-tier--gold"><Trophy :size="23" :stroke-width="1.8" aria-hidden="true" /><strong>{{ unlockedTierCounts.gold }}</strong><span>{{ $t('game.tiers.gold') }}</span></div>
+            <div v-if="isDiamond" class="game-tier game-tier--diamond"><Diamond :size="23" fill="currentColor" aria-hidden="true"/><strong>1</strong><span>{{ $t('game.tiers.diamond') }}</span></div>
           </div>
           <div v-if="game.playtime_forever" class="game-progress-summary__playtime">
             <span class="game-page__eyebrow">{{ $t('game.playtime') }}</span>

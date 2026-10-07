@@ -798,7 +798,7 @@ onBeforeUnmount(() => {
                   {{ $t("profile.cabinet.artworkUnavailable") }}
                 </span>
                 <span class="diamond-trophy__tier-badge">
-                  <Diamond :size="26" fill="currentColor" :stroke-width="1.7" />
+                  <Diamond :size="30" fill="currentColor" :stroke-width="1.7" />
                 </span>
               </span>
               <span class="diamond-trophy__info">

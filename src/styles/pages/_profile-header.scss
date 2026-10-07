@@ -55,6 +55,16 @@
       0 0 0 5px rgba(255, 255, 255, 0.012),
       0 14px 36px rgba(0, 0, 0, 0.42),
       0 0 42px rgba($trophy-diamond, 0.055);
+
+    &::after {
+      position: absolute;
+      inset: 1px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: inherit;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.09), transparent 36%);
+      content: "";
+      pointer-events: none;
+    }
   }
 
   &__avatar {

@@ -228,6 +228,7 @@
   gap: $space-2;
 }
 .archive-list-row {
+  position: relative;
   display: grid;
   min-width: 0;
   grid-template-columns: 100px minmax(0, 1fr) 18px;
@@ -240,11 +241,14 @@
   color: $color-text-primary;
   text-align: left;
   cursor: pointer;
-  transition: border-color $transition-normal, background $transition-normal;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  transition: border-color $transition-normal, background $transition-normal, box-shadow $transition-normal, transform $transition-normal;
 }
 .archive-list-row:hover {
+  transform: translateY(-1px);
   border-color: $glass-white-15;
   background: linear-gradient(100deg, $glass-white-04, $glass-white-01 72%);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .archive-list-row:active {
   background: $glass-white-06;
@@ -405,6 +409,18 @@
   background: radial-gradient(ellipse, $glass-white-06, $glass-white-01);
   box-shadow: $shadow-sm;
   transition: border-color $transition-normal, box-shadow $transition-normal, transform $transition-normal;
+}
+.archive-game__artwork::before {
+  position: absolute;
+  z-index: 2;
+  inset: 0 auto 0 -52%;
+  width: 38%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: skewX(-18deg);
+  transition: opacity 220ms ease, left 720ms $ease-expressive;
 }
 .archive-game__artwork > img {
   position: absolute;
@@ -606,6 +622,16 @@
     0 0 0 1px rgba($trophy-diamond, 0.23),
     0 0 20px rgba($trophy-diamond, 0.055),
     $shadow-md;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .archive-game:hover .archive-game__artwork::before {
+    left: 120%;
+    opacity: 0.72;
+  }
+
+  .archive-game--diamond:hover .archive-game__diamond {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 18px rgba($trophy-diamond, 0.2);
+  }
 }
 
 .games-archive-state {
@@ -858,7 +884,7 @@
     font-size: $font-size-xs;
   }
   .archive-game__playtime {
-    font-size: $font-size-xs;
+    font-size: $font-size-sm;
   }
   .games-archive-footer {
     align-items: center;
@@ -867,6 +893,7 @@
     gap: $space-2;
     padding-block: $space-3;
   }
+
   .games-pagination__pages button {
     min-width: 38px;
     min-height: 44px;

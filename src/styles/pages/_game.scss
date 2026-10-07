@@ -323,7 +323,7 @@
   transition: background $transition-normal;
 }
 .achievement-row:hover { background: linear-gradient(100deg, $glass-white-04, transparent 78%); }
-.achievement-row__tier-icon { color: var(--modal-tier); filter: drop-shadow(0 0 8px var(--modal-tier-glow)); }
+.achievement-row__tier-icon { color: var(--modal-tier); filter: drop-shadow(0 0 9px var(--modal-tier-glow)); transition: filter $transition-normal, transform $transition-normal; }
 .achievement-row__icon-wrap {
   position: relative;
   display: grid;
@@ -353,7 +353,7 @@
   object-fit: cover;
   filter: drop-shadow(0 12px 23px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 13px var(--modal-tier-glow));
 }
-.achievement-row__fallback { position: relative; z-index: 1; color: var(--modal-tier); filter: drop-shadow(0 0 11px var(--modal-tier-glow)); }
+.achievement-row__fallback { position: relative; z-index: 1; color: var(--modal-tier); filter: drop-shadow(0 0 11px var(--modal-tier-glow)); transition: filter $transition-normal, transform $transition-normal; }
 .achievement-row__earned-mark,
 .achievement-row__locked-mark {
   position: absolute;
@@ -372,6 +372,7 @@
 .achievement-row--locked .achievement-row__icon-wrap { border-color: rgba(255, 255, 255, 0.12); background: radial-gradient(circle, rgba(255, 255, 255, 0.035), rgba(0, 0, 0, 0.38) 74%); box-shadow: inset 0 1px 8px rgba(255, 255, 255, 0.04); }
 .achievement-row--locked .achievement-row__icon { filter: grayscale(1) brightness(0.64) drop-shadow(0 6px 12px rgba(0, 0, 0, 0.36)); opacity: 0.78; }
 .achievement-row--locked .achievement-row__fallback { color: $color-text-secondary; filter: grayscale(1); opacity: 0.72; }
+.achievement-row--locked .achievement-row__tier-icon { filter: grayscale(1); opacity: 0.64; }
 .achievement-row__body { min-width: 0; }
 .achievement-row__title-line {
   display: flex;
@@ -444,6 +445,12 @@
   .achievement-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
   .achievement-filters { grid-column: 1 / -1; }
 }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .achievement-row:hover .achievement-row__tier-icon,
+  .achievement-row:hover .achievement-row__fallback {
+    transform: scale(1.045);
+  }
+}
 @media (max-width: $breakpoint-md) {
   .game-page { padding-top: $space-3; }
   .game-archive-header { min-height: 300px; gap: $space-4; }
@@ -458,7 +465,9 @@
   .game-page { padding-inline: $space-4; padding-bottom: $space-10; }
   .game-archive-header { min-height: 0; gap: $space-4; margin-top: $space-3; padding: $space-5 $space-4; }
   .game-diamond-exhibit { gap: $space-3; margin: $space-3; padding: $space-2 $space-4; }
-  .game-diamond-exhibit__medal { width: 38px; height: 38px; flex-basis: 38px; }
+  .game-diamond-exhibit__medal { width: 40px; height: 40px; flex-basis: 40px; }
+  .game-diamond-exhibit__medal svg { width: 26px; height: 26px; }
+  .game-diamond-exhibit__aura { filter: blur(8px); }
   .game-diamond-exhibit__copy strong { font-size: $font-size-xs; }
   .game-diamond-exhibit__copy small { font-size: $font-size-xs; letter-spacing: 0.045em; }
   .game-archive-header::after { background: linear-gradient(90deg, rgba(5, 7, 9, 0.91), rgba(5, 7, 9, 0.62)), linear-gradient(0deg, rgba(5, 7, 9, 0.86), transparent 80%); }
@@ -526,7 +535,7 @@
 .game-archive-header--diamond::after { background: linear-gradient(0deg, #000, rgba(0, 0, 0, 0.84) 12%, rgba(0, 0, 0, 0.04) 72%), linear-gradient(180deg, rgba(0, 0, 0, 0.32), transparent 30%), radial-gradient(ellipse at 82% 54%, rgba($trophy-diamond, 0.12), transparent 46%); }
 .game-archive-header__inner { display: flex; width: min(100%, $container-2xl); min-width: 0; flex-direction: column; justify-content: space-between; margin-inline: auto; padding-block: $space-5 $space-12; }
 .game-archive-header__content { width: min(100%, 860px); min-width: 0; margin-top: auto; padding-top: $space-10; animation: game-content-arrive 650ms $ease-expressive both; }
-.game-page__eyebrow { margin: 0; color: rgba(255, 255, 255, 0.68); font-size: $font-size-xs; font-weight: $font-weight-medium; letter-spacing: $letter-spacing-uppercase; text-transform: uppercase; }
+.game-page__eyebrow { margin: 0; color: rgba(255, 255, 255, 0.68); font-size: $font-size-sm; font-weight: $font-weight-medium; letter-spacing: $letter-spacing-uppercase; text-transform: uppercase; }
 .game-archive-header h1 { max-width: 1000px; margin: $space-2 0 $space-5; color: #fff; font-size: clamp(2.6rem, 7.4vw, 6rem); font-weight: $font-weight-light; letter-spacing: -0.065em; line-height: 0.98; overflow-wrap: anywhere; text-shadow: 0 3px 34px rgba(0, 0, 0, 0.64); }
 .game-archive-header__completion { display: flex; align-items: center; gap: $space-5; }
 .game-archive-header__completion > strong { color: #fff; font-family: $font-mono; font-size: clamp(2.4rem, 5vw, 4.25rem); font-weight: $font-weight-light; letter-spacing: -0.08em; line-height: 1; }
@@ -539,10 +548,12 @@
 .game-archive-header__progress > span { background: linear-gradient(90deg, #b8b8b8, #fff); transition: width 750ms $ease-expressive; }
 .game-archive-header__progress > span.is-diamond { background: linear-gradient(90deg, $trophy-diamond-dark, $trophy-diamond-light); }
 .game-archive-header__playtime { margin: $space-4 0 0; color: rgba(255, 255, 255, 0.72); font-size: $font-size-sm; }
-.game-diamond-exhibit { border-color: rgba($trophy-diamond-light, 0.22); background: linear-gradient(110deg, rgba($trophy-diamond, 0.1), rgba(0, 0, 0, 0.68) 76%); }
+.game-diamond-exhibit { border-color: rgba($trophy-diamond-light, 0.22); background: linear-gradient(110deg, rgba($trophy-diamond, 0.1), rgba(0, 0, 0, 0.68) 76%); backdrop-filter: blur(5px) saturate(1.08); animation: game-diamond-arrive 620ms $ease-expressive 120ms both; }
 .game-diamond-exhibit__medal { border-color: rgba($trophy-diamond-light, 0.38); }
+.game-diamond-exhibit__medal svg { animation: game-diamond-icon-arrive 520ms $ease-expressive 250ms both; }
+.game-diamond-exhibit__medal::after { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.18) 48%, transparent 66%); content: ""; opacity: 0; pointer-events: none; transform: translateX(-65%); animation: game-diamond-shine 1.1s 420ms ease-out both; }
 .game-diamond-exhibit__copy strong { font-size: $font-size-sm; }
-.game-diamond-exhibit__copy small { font-size: $font-size-xs; }
+.game-diamond-exhibit__copy small { font-size: $font-size-sm; }
 
 .game-progress-summary { display: grid; grid-template-columns: minmax(150px, 0.8fr) minmax(0, 2fr) minmax(180px, 0.8fr); align-items: center; gap: $space-8; padding: $space-8 0; border-bottom: 1px solid $glass-white-10; animation: game-content-arrive 650ms $ease-expressive 100ms both; }
 .game-progress-summary__lead { display: flex; flex-direction: column; gap: $space-1; }
@@ -553,12 +564,13 @@
 .game-tier { display: grid; grid-template-columns: 22px auto; align-items: center; column-gap: $space-2; color: $color-text-secondary; }
 .game-tier > strong { color: $color-text-primary; font-family: $font-mono; font-size: $font-size-lg; font-weight: $font-weight-medium; }
 .game-tier > span:last-child { grid-column: 2; color: $color-text-secondary; font-size: $font-size-xs; letter-spacing: 0.06em; text-transform: uppercase; }
-.game-tier__medal { color: currentColor; font-size: 19px; line-height: 1; text-shadow: 0 0 12px currentColor; }
 .game-tier--bronze { color: $trophy-bronze-light; }
 .game-tier--silver { color: $trophy-silver-light; }
 .game-tier--gold { color: $trophy-gold-light; }
 .game-tier--diamond { color: $trophy-diamond-light; }
-.game-tier--diamond > svg { grid-row: span 2; }
+.game-tier > svg { filter: drop-shadow(0 0 7px currentColor); transition: filter $transition-normal, transform $transition-normal; }
+.game-tier--diamond > svg { filter: drop-shadow(0 0 10px rgba($trophy-diamond, 0.48)); }
+.game-tier > svg { grid-row: span 2; }
 .game-progress-summary__playtime { display: flex; flex-direction: column; gap: $space-2; padding-left: $space-6; border-left: 1px solid $glass-white-10; }
 .game-progress-summary__playtime strong { color: $color-text-secondary; font-size: $font-size-sm; font-weight: $font-weight-medium; }
 
@@ -590,6 +602,9 @@
 @keyframes game-artwork-arrive { from { opacity: 0.55; transform: scale(1.055); } to { opacity: 1; transform: scale(1.025); } }
 @keyframes game-content-arrive { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes achievement-arrive { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes game-diamond-arrive { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes game-diamond-icon-arrive { from { opacity: 0.6; transform: scale(0.88); } to { opacity: 1; transform: scale(1); } }
+@keyframes game-diamond-shine { 0% { opacity: 0; transform: translateX(-65%); } 28% { opacity: 0.75; } 100% { opacity: 0; transform: translateX(65%); } }
 
 @media (max-width: $breakpoint-lg) {
   .game-progress-summary { grid-template-columns: minmax(120px, 0.7fr) minmax(0, 2fr); gap: $space-5; }
@@ -626,7 +641,6 @@
   .game-progress-summary__lead > strong { font-size: $font-size-2xl; }
   .game-progress-summary__tiers { justify-content: space-between; gap: $space-2; }
   .game-tier { grid-template-columns: 19px auto; column-gap: $space-1; }
-  .game-tier__medal { font-size: 16px; }
   .game-tier > strong { font-size: $font-size-md; }
   .game-tier > span:last-child { font-size: $font-size-xs; }
   .achievement-archive { margin-top: $space-10; }

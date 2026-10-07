@@ -183,6 +183,7 @@
     &__field {
       min-height: $button-height-lg;
       padding-left: $space-4;
+      backdrop-filter: blur(7px) saturate($glass-saturation);
     }
 
     &__input {
